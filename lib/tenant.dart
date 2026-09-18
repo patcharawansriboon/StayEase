@@ -5,12 +5,18 @@ class TenantScreen extends StatefulWidget {
   final VoidCallback? onNavigateToDashboard;
   final VoidCallback? onNavigateToMasterTenant;
   final VoidCallback? onNavigateToEditeTenant;
+  final VoidCallback? onNavigateToReportRepair;
+  final VoidCallback? onNavigateToProfile;
+  final List<Map<String, String>> tenants;
 
   const TenantScreen({
     super.key,
     this.onNavigateToDashboard,
     this.onNavigateToMasterTenant,
     this.onNavigateToEditeTenant,
+    this.onNavigateToReportRepair,
+    this.onNavigateToProfile,
+    this.tenants = const [],
   });
 
   @override
@@ -21,30 +27,19 @@ class _TenantScreenState extends State<TenantScreen> {
   int _selectedIndex = 1;
   final _searchController = TextEditingController();
   String _filter = 'ทั้งหมด';
+  List<Map<String, String>> _tenants = [];
 
-  final List<Map<String, String>> _tenants = [
-    {
-      'name': 'พัชราวรรณ  ศรีบุญ',
-      'room': 'A303',
-      'role': 'ผู้เช่าหลัก',
-      'phone': '099-999999',
-      'status': 'กำลังเช่า',
-    },
-    {
-      'name': 'พัชราวรรณ  ศรีบุญ',
-      'room': 'A303',
-      'role': 'Roommate',
-      'phone': '099-999999',
-      'status': 'กำลังเช่า',
-    },
-    {
-      'name': 'พัชราวรรณ  ศรีบุญ',
-      'room': 'C101',
-      'role': 'ผู้เช่าหลัก',
-      'phone': '099-999999',
-      'status': 'ว่าง/รอ',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _tenants = widget.tenants.isNotEmpty
+        ? widget.tenants
+        : [
+            {'name': 'พัชราวรรณ  ศรีบุญ', 'room': 'A303', 'role': 'ผู้เช่าหลัก', 'phone': '099-999999', 'status': 'กำลังเช่า'},
+            {'name': 'สมชาย  ใจดี', 'room': 'A303', 'role': 'Roommate', 'phone': '088-888888', 'status': 'กำลังเช่า'},
+            {'name': 'วิภา  รักเรียน', 'room': 'C101', 'role': 'ผู้เช่าหลัก', 'phone': '077-777777', 'status': 'ว่าง/รอ'},
+          ];
+  }
 
   @override
   void dispose() {
@@ -90,9 +85,12 @@ class _TenantScreenState extends State<TenantScreen> {
                 const SizedBox(height: 12),
                 _buildStatBar(),
                 const SizedBox(height: 12),
-                _buildFilterDropdown(),
+                _buildFilters(),
                 const SizedBox(height: 12),
-                ..._tenants.map(_buildTenantCard),
+                ..._tenants
+                    .where((t) =>
+                        _filter == 'ทั้งหมด' || t['status'] == _filter)
+                    .map(_buildTenantCard),
               ],
             ),
           ),
@@ -141,25 +139,25 @@ class _TenantScreenState extends State<TenantScreen> {
 
   Widget _buildAddButton() {
     return SizedBox(
-      height: 38,
+      height: 28,
       child: ElevatedButton.icon(
         onPressed: () {},
-        icon: const Icon(Icons.add, size: 18, color: Colors.white),
+        icon: const Icon(Icons.add, size: 14, color: Colors.white),
         label: const Text(
           'เพิ่มผู้เช่า',
           style: TextStyle(
             fontFamily: 'Prompt',
-            fontSize: 14,
+            fontSize: 12,
             color: Colors.white,
           ),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF4181CB),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
           ),
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
         ),
       ),
     );
@@ -259,47 +257,49 @@ class _TenantScreenState extends State<TenantScreen> {
     );
   }
 
-  Widget _buildFilterDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF4181CB),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _filter,
-          isDense: true,
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 20, color: Colors.white),
-          style: const TextStyle(
-            fontFamily: 'Prompt',
-            fontSize: 13,
-            color: Colors.white,
-          ),
-          selectedItemBuilder: (context) => ['ทั้งหมด', 'กำลังเช่า', 'ว่าง/รอ']
-              .map((e) => Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(e,
-                        style: const TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 13,
-                            color: Colors.white)),
-                  ))
-              .toList(),
-          items: ['ทั้งหมด', 'กำลังเช่า', 'ว่าง/รอ']
-              .map((e) => DropdownMenuItem<String>(
-                    value: e,
-                    child: Text(e,
-                        style: const TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 13,
-                            color: Color(0xFF000000))),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _filter = v ?? 'ทั้งหมด'),
-        ),
+  Widget _buildFilters() {
+    const filters = <String>['ทั้งหมด', 'กำลังเช่า', 'ว่าง/รอ'];
+
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: filters.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, index) {
+          final label = filters[index];
+          final selected = _filter == label;
+          return GestureDetector(
+            onTap: () => setState(() => _filter = label),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: selected
+                    ? const Color(0xFF4181CB)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(
+                  color: selected
+                      ? const Color(0xFF4181CB)
+                      : const Color(0xFFDDE5EE),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 13,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w400,
+                    color: selected ? Colors.white : const Color(0xFF667085),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -424,7 +424,7 @@ class _TenantScreenState extends State<TenantScreen> {
       width: navWidth,
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFF78A2D2),
+        color: const Color(0xFF4F8FDB),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -472,13 +472,16 @@ class _TenantScreenState extends State<TenantScreen> {
 
     return List.generate(6, (i) {
       final isActive = i == _selectedIndex;
-      final color = isActive ? const Color(0xFF78A2D2) : Colors.white;
+      final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
       return GestureDetector(
         onTap: () {
+          setState(() => _selectedIndex = i);
           if (i == 0 && widget.onNavigateToDashboard != null) {
             widget.onNavigateToDashboard!();
-          } else {
-            setState(() => _selectedIndex = i);
+          } else if (i == 3 && widget.onNavigateToReportRepair != null) {
+            widget.onNavigateToReportRepair!();
+          } else if (i == 5 && widget.onNavigateToProfile != null) {
+            widget.onNavigateToProfile!();
           }
         },
         child: SizedBox(

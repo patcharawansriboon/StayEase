@@ -12,6 +12,10 @@ class HomeUserScreen extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final bool isRoommate;
   final String userName;
+  final String userPhone;
+  final String roomNumber;
+  final Map<String, dynamic> currentBill;
+  final List<Map<String, String>> announcements;
 
   const HomeUserScreen({
     super.key,
@@ -25,6 +29,10 @@ class HomeUserScreen extends StatefulWidget {
     this.onNavigateToProfile,
     this.isRoommate = false,
     this.userName = 'พัชราวรรณ  ศรีบุญ',
+    this.userPhone = '099-9999999',
+    this.roomNumber = 'A303',
+    this.currentBill = const {},
+    this.announcements = const [],
   });
 
   @override
@@ -35,22 +43,23 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
   int _selectedIndex = 0;
 
   @override
+  void didUpdateWidget(HomeUserScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // รีเซ็ต indicator กลับที่ home เมื่อ navigate กลับมาหน้านี้
+    if (_selectedIndex != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedIndex = 0);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -127,7 +136,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'ห้อง A303',
+                  'ห้อง ${widget.roomNumber}',
                   style: TextStyle(
                     fontFamily: 'Prompt',
                     fontSize: 15,
@@ -144,7 +153,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
             width: 28,
             height: 28,
             decoration: const BoxDecoration(
-              color: Color(0xFF78A2D2),
+              color: Color(0xFF4F8FDB),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -191,7 +200,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
             // Blue background
             Container(
               height: 140,
-              color: const Color(0xFF78A2D2),
+              color: const Color(0xFF4F8FDB),
             ),
             // Wave / bottom decoration
             Positioned(
@@ -235,9 +244,9 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'กรกฎาคม 2569',
-                            style: TextStyle(
+                          Text(
+                            widget.currentBill['month'] ?? 'กรกฎาคม 2569',
+                            style: const TextStyle(
                               fontFamily: 'Prompt',
                               fontSize: 12,
                               color: Colors.white,
@@ -246,18 +255,20 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                           const SizedBox(height: 4),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
-                            children: const [
+                            children: [
                               Text(
-                                '5,090',
-                                style: TextStyle(
+                                widget.currentBill['total'] != null
+                                    ? '${widget.currentBill['total']}'
+                                    : '5,090',
+                                style: const TextStyle(
                                   fontFamily: 'Prompt',
                                   fontSize: 20,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFFFEFFAF),
                                 ),
                               ),
-                              SizedBox(width: 7),
-                              Padding(
+                              const SizedBox(width: 7),
+                              const Padding(
                                 padding: EdgeInsets.only(bottom: 2),
                                 child: Text(
                                   'บาท',
@@ -291,9 +302,9 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Text(
-                        'รอชำระ',
-                        style: TextStyle(
+                      Text(
+                        widget.currentBill['status_label'] ?? 'รอชำระ',
+                        style: const TextStyle(
                           fontFamily: 'Prompt',
                           fontSize: 12,
                           color: Colors.white,
@@ -305,9 +316,9 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                       const Icon(Icons.calendar_month_outlined,
                           size: 13, color: Colors.white),
                       const SizedBox(width: 4),
-                      const Text(
-                        'ครบกำหนด  5 สิงหาคม 2569',
-                        style: TextStyle(
+                      Text(
+                        'ครบกำหนด  ${widget.currentBill['due_date'] ?? '5 สิงหาคม 2569'}',
+                        style: const TextStyle(
                           fontFamily: 'Prompt',
                           fontSize: 12,
                           color: Colors.white,
@@ -320,7 +331,6 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Detail button
                       GestureDetector(
                         onTap: widget.onNavigateToBill,
                         child: Container(
@@ -328,7 +338,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                           height: 23,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            border: Border.all(color: const Color(0xFF78A2D2)),
+                            border: Border.all(color: const Color(0xFF4F8FDB)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Center(
@@ -337,7 +347,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                               style: TextStyle(
                                 fontFamily: 'Prompt',
                                 fontSize: 10,
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                               ),
                             ),
                           ),
@@ -352,7 +362,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                             width: 70,
                             height: 23,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF78A2D2),
+                              color: const Color(0xFF4F8FDB),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Center(
@@ -496,7 +506,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                       width: 75,
                       height: 22,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF78A2D2),
+                        color: const Color(0xFF4F8FDB),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: GestureDetector(
@@ -586,7 +596,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
         width: 280,
         height: 52,
         decoration: BoxDecoration(
-          color: const Color(0xFF78A2D2),
+          color: const Color(0xFF4F8FDB),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -602,7 +612,7 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
             // Active indicator circle
             AnimatedPositioned(
               duration: const Duration(milliseconds: 200),
-              left: 11.67 + _selectedIndex * 53.17,
+              left: 11.6667 + _selectedIndex * 53.1667,
               top: 4,
               child: Container(
                 width: 44,
@@ -646,9 +656,10 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
 
     return List.generate(items.length, (i) {
       final isActive = i == _selectedIndex;
-      final color = isActive ? const Color(0xFF78A2D2) : Colors.white;
+      final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
       return GestureDetector(
         onTap: () {
+          setState(() => _selectedIndex = i);
           if (i == 1 && widget.onNavigateToRentalFee != null) {
             widget.onNavigateToRentalFee!();
           } else if (i == 2 && widget.onNavigateToChat != null) {
@@ -657,8 +668,6 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
             widget.onNavigateToAnnounce!();
           } else if (i == 4 && widget.onNavigateToProfile != null) {
             widget.onNavigateToProfile!();
-          } else {
-            setState(() => _selectedIndex = i);
           }
         },
         child: SizedBox(

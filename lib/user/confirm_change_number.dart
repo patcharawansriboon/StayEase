@@ -30,20 +30,10 @@ class _ConfirmChangeNumberScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -99,11 +89,15 @@ class _ConfirmChangeNumberScreenState
                     const SizedBox(height: 8),
 
                     // Phone input
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+Container(
+                       decoration: BoxDecoration(
+                         color: Colors.white,
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(
+                           color: const Color(0xFFD9D9D9),
+                           width: 1,
+                         ),
+                       ),
                       child: TextField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
@@ -137,7 +131,7 @@ class _ConfirmChangeNumberScreenState
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF78A2D2).withValues(alpha: 0.15),
+                        color: const Color(0xFF4F8FDB).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -146,7 +140,7 @@ class _ConfirmChangeNumberScreenState
                           Icon(
                             Icons.chat_bubble_outline,
                             size: 20,
-                            color: const Color(0xFF78A2D2).withValues(alpha: 0.6),
+                            color: const Color(0xFF4F8FDB).withValues(alpha: 0.6),
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
@@ -155,7 +149,7 @@ class _ConfirmChangeNumberScreenState
                               style: TextStyle(
                                 fontFamily: 'Prompt',
                                 fontSize: 12,
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                                 height: 1.5,
                               ),
                             ),
@@ -183,8 +177,8 @@ class _ConfirmChangeNumberScreenState
                       ? () => widget.onSave?.call(_phoneController.text)
                       : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF78A2D2),
-                    disabledBackgroundColor: const Color(0xFF78A2D2).withValues(alpha: 0.4),
+                    backgroundColor: const Color(0xFF4F8FDB),
+                    disabledBackgroundColor: const Color(0xFF4F8FDB).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),

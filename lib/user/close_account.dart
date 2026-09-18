@@ -21,20 +21,10 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB), // ฟ้าขาวนวลด้านบนซ้าย
-              Color(0xFFBFD9F2), // ฟ้าพาสเทลกลาง
-              Color(0xFFCFE0F0), // ฟ้าอมเทา
-              Color(0xFFFFFFFF), // ขาวด้านล่างขวา
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -81,7 +71,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF78A2D2).withValues(alpha: 0.15),
+                        color: const Color(0xFF4F8FDB).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -197,7 +187,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
   Widget _buildBulletItem(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFF78A2D2)),
+        Icon(icon, size: 18, color: const Color(0xFF4F8FDB)),
         const SizedBox(width: 10),
         Text(
           text,

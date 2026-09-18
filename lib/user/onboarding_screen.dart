@@ -52,7 +52,7 @@ class OnboardingScreen extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF78A2D2),
+                      color: Color(0xFF4F8FDB),
                       height: 1.4,
                     ),
                   ),
@@ -82,7 +82,7 @@ class OnboardingScreen extends StatelessWidget {
               height: 8,
               decoration: BoxDecoration(
                 color: index == currentPage
-                    ? const Color(0xFF78A2D2)
+                    ? const Color(0xFF4F8FDB)
                     : const Color(0xFFD0D0D0),
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -96,7 +96,7 @@ class OnboardingScreen extends StatelessWidget {
             currentPage < pages.length - 1 ? 'ถัดไป' : 'เริ่มต้นใช้งาน',
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF78A2D2),
+              color: Color(0xFF4F8FDB),
               fontWeight: FontWeight.w500,
             ),
           ),

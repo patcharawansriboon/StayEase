@@ -4,13 +4,29 @@ import 'package:flutter_svg/flutter_svg.dart';
 class DashboardScreen extends StatefulWidget {
   final String adminName;
   final VoidCallback? onNavigateToTenant;
+  final VoidCallback? onNavigateToBill;
   final VoidCallback? onNavigateToNotification;
+  final VoidCallback? onNavigateToReportRepair;
+  final VoidCallback? onNavigateToProfile;
+  // mock data
+  final Map<String, int> stats;
+  final List<Map<String, String>> repairRequests;
 
   const DashboardScreen({
     super.key,
     this.adminName = 'พัชราวรรณ  ศรีบุญ',
     this.onNavigateToTenant,
+    this.onNavigateToBill,
     this.onNavigateToNotification,
+    this.onNavigateToReportRepair,
+    this.onNavigateToProfile,
+    this.stats = const {
+      'total_tenants': 58,
+      'total_rooms': 60,
+      'vacant_rooms': 2,
+      'repair_requests': 3,
+    },
+    this.repairRequests = const [],
   });
 
   @override
@@ -27,24 +43,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Stack(
         children: [
           SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 60, 16, 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 16),
-                  _buildStatGrid(),
-                  const SizedBox(height: 16),
-                  _buildRepairCard(),
-                  const SizedBox(height: 16),
-                  _buildPaymentSection(),
-                ],
-              ),
+            padding: const EdgeInsets.fromLTRB(16, 60, 16, 100),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 16),
+                _buildStatGrid(),
+                const SizedBox(height: 16),
+                _buildRepairCard(),
+                const SizedBox(height: 16),
+                _buildPaymentSection(),
+              ],
             ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: _buildBottomNav(),
           ),
+          Align(alignment: Alignment.bottomCenter, child: _buildBottomNav()),
         ],
       ),
     );
@@ -52,65 +65,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ---- Header ----
   Widget _buildHeader() {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 24,
-          backgroundImage: const AssetImage('assets/images/user_avatar.png'),
-          backgroundColor: Colors.grey.shade200,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.adminName,
-                style: const TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF000000),
-                ),
-              ),
-              const Text(
-                'Admin',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 13,
-                  color: Color(0xFF999999),
-                ),
-              ),
-            ],
+    return GestureDetector(
+      onTap: widget.onNavigateToProfile,
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundImage: const AssetImage('assets/images/user_avatar.png'),
+            backgroundColor: Colors.grey.shade200,
           ),
-        ),
-        GestureDetector(
-          onTap: widget.onNavigateToNotification,
-          child: Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: Color(0xFFEAF2FB),
-              shape: BoxShape.circle,
-            ),
-            child: SvgPicture.asset(
-              'assets/images/icon_bell.svg',
-              width: 22,
-              height: 22,
-              colorFilter: const ColorFilter.mode(
-                Color(0xFF4181CB),
-                BlendMode.srcIn,
-              ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.adminName,
+                  style: const TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF000000),
+                  ),
+                ),
+                const Text(
+                  'Admin',
+                  style: TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 13,
+                    color: Color(0xFF999999),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+          GestureDetector(
+            onTap: widget.onNavigateToNotification,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEAF2FB),
+                shape: BoxShape.circle,
+              ),
+              child: SvgPicture.asset(
+                'assets/images/icon_bell.svg',
+                width: 22,
+                height: 22,
+                colorFilter: const ColorFilter.mode(
+                  Color(0xFF4181CB),
+                  BlendMode.srcIn,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ---- Stat grid (2x2) ----
   Widget _buildStatGrid() {
+    final s = widget.stats;
     return Column(
       children: [
         Row(
@@ -120,7 +137,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 bg: const Color(0xFFEAF2FB),
                 icon: Icons.people,
                 iconColor: const Color(0xFF4181CB),
-                number: '58',
+                number: '${s['total_tenants'] ?? 0}',
                 label: 'ผู้เช่าทั้งหมด',
               ),
             ),
@@ -130,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 bg: const Color(0xFFFFF8E5),
                 icon: Icons.home,
                 iconColor: const Color(0xFFE6A700),
-                number: '60',
+                number: '${s['total_rooms'] ?? 0}',
                 label: 'ห้องทั้งหมด',
               ),
             ),
@@ -144,7 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 bg: const Color(0xFFE9F7EC),
                 icon: Icons.meeting_room,
                 iconColor: const Color(0xFF4CAF50),
-                number: '2',
+                number: '${s['vacant_rooms'] ?? 0}',
                 label: 'ห้องว่าง',
               ),
             ),
@@ -154,7 +171,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 bg: const Color(0xFFFCE9E9),
                 icon: Icons.build,
                 iconColor: const Color(0xFFE05C5C),
-                number: '3',
+                number: '${s['repair_requests'] ?? 0}',
                 label: 'แจ้งซ่อม',
               ),
             ),
@@ -204,8 +221,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-// ---- แจ้งซ่อม ----
   Widget _buildRepairCard() {
+    final repairs = widget.repairRequests.isNotEmpty
+        ? widget.repairRequests.take(3).toList()
+        : [
+            {
+              'room': 'A301',
+              'tenant': widget.adminName,
+              'time': '8 ก.ย. 09:45',
+              'status': 'กำลังดำเนินการ',
+            },
+            {
+              'room': 'A303',
+              'tenant': widget.adminName,
+              'time': '8 ก.ย. 10:12',
+              'status': 'กำลังดำเนินการ',
+            },
+          ];
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -218,8 +250,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.build_outlined,
-                  size: 20, color: Color(0xFFE05C5C)),
+              const Icon(
+                Icons.build_outlined,
+                size: 20,
+                color: Color(0xFFE05C5C),
+              ),
               const SizedBox(width: 6),
               const Text(
                 'แจ้งซ่อม',
@@ -231,26 +266,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const Spacer(),
-              const Text(
-                'ดูทั้งหมด',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 13,
-                  color: Color(0xFF4181CB),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
-          _buildRepairRow('A301', '8 ก.ย. 09:45'),
-          const SizedBox(height: 10),
-          _buildRepairRow('A303', '8 ก.ย. 09:45'),
+          ...repairs.map(
+            (r) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildRepairRow(
+                r['room'] ?? '',
+                r['time'] ?? '',
+                r['tenant'] ?? '',
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildRepairRow(String room, String time) {
+  Widget _buildRepairRow(String room, String time, [String? tenantName]) {
+    final name = tenantName ?? widget.adminName;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -271,7 +306,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.adminName,
+                  name,
                   style: const TextStyle(
                     fontFamily: 'Prompt',
                     fontSize: 14,
@@ -406,11 +441,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ---- Bottom Navigation (6 icons) ----
+   // ---- Bottom Navigation (6 icons) ----
   Widget _buildBottomNav() {
     const navWidth = 320.0;
-    const itemCount = 6;
     const circleSize = 40.0;
+    const itemCount = 6;
     final slot = navWidth / itemCount;
     final indicatorLeft = slot * _selectedIndex + (slot - circleSize) / 2;
 
@@ -419,7 +454,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: navWidth,
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFF78A2D2),
+        color: const Color(0xFF4F8FDB),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -461,34 +496,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
       4: 'assets/images/icon_announcement.svg',
       5: 'assets/images/icon_user.svg',
     };
-    final materialIcons = <int, IconData>{
-      3: Icons.build_outlined,
-    };
+    final materialIcons = <int, IconData>{3: Icons.build_outlined};
 
     return List.generate(6, (i) {
       final isActive = i == _selectedIndex;
-      final color = isActive ? const Color(0xFF78A2D2) : Colors.white;
+      final iconColor = isActive ? const Color(0xFF4F8FDB) : Colors.white;
+
+      final Widget iconWidget = svgPaths.containsKey(i)
+          ? SvgPicture.asset(
+              svgPaths[i]!,
+              width: 24,
+              height: 24,
+              colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+            )
+          : Icon(materialIcons[i], size: 22, color: iconColor);
+
       return GestureDetector(
         onTap: () {
+          setState(() => _selectedIndex = i);
           if (i == 1 && widget.onNavigateToTenant != null) {
             widget.onNavigateToTenant!();
-          } else {
-            setState(() => _selectedIndex = i);
+          } else if (i == 2 && widget.onNavigateToBill != null) {
+            widget.onNavigateToBill!();
+          } else if (i == 3 && widget.onNavigateToReportRepair != null) {
+            widget.onNavigateToReportRepair!();
+          } else if (i == 4 && widget.onNavigateToNotification != null) {
+            widget.onNavigateToNotification!();
+          } else if (i == 5 && widget.onNavigateToProfile != null) {
+            widget.onNavigateToProfile!();
           }
         },
         child: SizedBox(
           width: slot,
           height: 52,
-          child: Center(
-            child: svgPaths.containsKey(i)
-                ? SvgPicture.asset(
-                    svgPaths[i]!,
-                    width: 24,
-                    height: 24,
-                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-                  )
-                : Icon(materialIcons[i], size: 22, color: color),
-          ),
+          child: Center(child: iconWidget),
         ),
       );
     });

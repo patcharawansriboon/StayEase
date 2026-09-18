@@ -3,275 +3,210 @@ import 'package:flutter/material.dart';
 class BillScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onNavigateToPayment;
+  final Map<String, dynamic> currentBill;
+  final String userName;
+  final String roomNumber;
 
-  const BillScreen({super.key, this.onBack, this.onNavigateToPayment});
+  const BillScreen({
+    super.key,
+    this.onBack,
+    this.onNavigateToPayment,
+    this.currentBill = const {},
+    this.userName = 'พัชราวรรณ  ศรีบุญ',
+    this.roomNumber = 'A101',
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
-        ),
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: _buildBillCard(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---- Header ----
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 60, 16, 12),
-      child: Row(
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: Column(
         children: [
-          GestureDetector(
-            onTap: onBack,
-            child: const Icon(
-              Icons.chevron_left,
-              size: 24,
-              color: Color(0xFF000000),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---- Bill Card ----
-  Widget _buildBillCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF78A2D2),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Title section
-          Column(
-            children: const [
-              Text(
-                'บิลประจำเดือน',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFFEFFAF),
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'กรกฎาคม 2569',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // White inner card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 17),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 60, 16, 12),
+            child: Row(
               children: [
-                // รายการค่าใช้จ่าย
-                _buildBillRow('ค่าเช่าห้อง', '4,500.00', isBold: false),
-                const SizedBox(height: 12),
-                _buildBillRow('ค่าไฟ', '320.00', isBold: false),
-                const SizedBox(height: 12),
-                _buildBillRow('ค่าน้ำ', '270.00', isBold: false),
-                const SizedBox(height: 12),
-                _buildBillRow('ค่าปรับ / อื่นๆ', '00.00', isBold: false),
-                const SizedBox(height: 12),
-
-                // Divider
-                const Divider(height: 1, color: Color(0xFFD9D9D9)),
-                const SizedBox(height: 12),
-
-                // รวมทั้งหมด
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
-                      'รวทั้งหมด',
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF000000),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          '5,090.00',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF000000),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'บาท',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF000000),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Divider (0.5px)
-                Container(height: 0.5, color: const Color(0xFFD9D9D9)),
-                const SizedBox(height: 12),
-
-                // ครบกำหนด
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
-                      'ครบกำหนด',
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 10,
-                        color: Color(0xFF000000),
-                      ),
-                    ),
-                    Text(
-                      '5 สิงหาคม 2569',
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 10,
-                        color: Color(0xFF000000),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // ช่องทางการชำระ
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'ช่องทางการชำระ',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 10,
-                      color: Color(0xFF000000),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // QR PromptPay box
-                Center(
-                  child: GestureDetector(
-                    onTap: onNavigateToPayment,
-                    child: Container(
-                    width: 75,
-                    height: 75,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 8, horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(
-                          color: const Color(0xFFD9D9D9), width: 1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(
-                          Icons.qr_code_2,
-                          size: 34,
-                          color: Color(0xFF000000),
-                        ),
-                        SizedBox(height: 1),
-                        Text(
-                          'QR PromptPay',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 8,
-                            color: Color(0xFF000000),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+                GestureDetector(
+                  onTap: onBack,
+                  child: const Icon(
+                    Icons.chevron_left,
+                    size: 28,
+                    color: Color(0xFF000000),
                   ),
                 ),
               ],
             ),
           ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFD9D9D9)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 28),
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 100,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          _buildInfoRow('ผู้เช่า', userName),
+                          const SizedBox(height: 8),
+                          _buildInfoRow('ห้อง', roomNumber),
+                          const SizedBox(height: 8),
+                          _buildInfoRow('รอบบิล', currentBill['month'] ?? 'กรกฎาคม 2569'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          _buildAmountRow('ค่าเช่า', '${currentBill['rent'] ?? 4500} บาท'),
+                          const SizedBox(height: 10),
+                          _buildAmountRow('ค่าน้ำ', '${currentBill['water'] ?? 180} บาท'),
+                          const SizedBox(height: 10),
+                          _buildAmountRow('ค่าไฟ', '${currentBill['electricity'] ?? 320} บาท'),
+                          if ((currentBill['penalty'] ?? 0) > 0) ...[
+                            const SizedBox(height: 10),
+                            _buildAmountRow('ค่าปรับ', '${currentBill['penalty']} บาท'),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildAmountRow('รวมทั้งสิ้น', '${currentBill['total'] ?? 5000} บาท', bold: true),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildAmountRow('ครบกำหนด', currentBill['due_date'] ?? '5 สิงหาคม 2569'),
+                    ),
+                    const SizedBox(height: 24),
+                    GestureDetector(
+                      onTap: onNavigateToPayment,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFEEEEEE)),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Image.asset(
+                              'assets/images/qr_code_payment-48e4cd.png',
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.contain,
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'QR PromptPay',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 12,
+                                color: Color(0xFF333333),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'ขอบคุณที่ใช้บริการ StayEase',
+                      style: TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 13,
+                        color: Color(0xFF999999),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 4,
+                      width: 60,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F8FDB),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBillRow(String label, String amount, {bool isBold = false}) {
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Prompt',
+              fontSize: 14,
+              color: Color(0xFF888888),
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontFamily: 'Prompt',
+            fontSize: 14,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAmountRow(String label, String amount, {bool bold = false}) {
     final style = TextStyle(
       fontFamily: 'Prompt',
-      fontSize: 12,
-      fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
-      color: const Color(0xFF000000),
+      fontSize: 14,
+      fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+      color: const Color(0xFF1A1A2E),
     );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: style),
-        Row(
-          children: [
-            Text(amount, style: style),
-            const SizedBox(width: 8),
-            Text('บาท', style: style),
-          ],
-        ),
+        Text(amount, style: style),
       ],
     );
   }

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHome;
+  final VoidCallback? onNavigateToDashboard;
   final VoidCallback? onNavigateToRentalFee;
   final VoidCallback? onNavigateToChat;
   final VoidCallback? onNavigateToAnnounce;
@@ -19,8 +20,13 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback? onNavigateToCloseAccount;
   final VoidCallback? onLeaveRoom;
   final VoidCallback? onUpgradeToTenant;
+  // admin bottom nav
+  final VoidCallback? onNavigateToTenant;
+  final VoidCallback? onNavigateToReportRepair;
+  final VoidCallback? onNavigateToNotification;
   final String phoneNumber;
   final bool isRoommate;
+  final bool isAdmin;
   final String userName;
   final bool showSavedToast;
   final VoidCallback? onToastShown;
@@ -28,12 +34,17 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     this.isRoommate = false,
+    this.isAdmin = false,
     this.showSavedToast = false,
     this.onToastShown,
     this.onLeaveRoom,
     this.onUpgradeToTenant,
+    this.onNavigateToTenant,
+    this.onNavigateToReportRepair,
+    this.onNavigateToNotification,
     this.userName = 'พัชราวรรณ  ศรีบุญ',
     this.onNavigateToHome,
+    this.onNavigateToDashboard,
     this.onNavigateToRentalFee,
     this.onNavigateToChat,
     this.onNavigateToAnnounce,
@@ -54,7 +65,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  int _selectedIndex = 4;
+  late int _selectedIndex;
   bool _notificationEnabled = true;
   late String _phoneNumber;
   File? _profileImage;
@@ -71,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _phoneNumber = widget.phoneNumber;
+    _selectedIndex = widget.isAdmin ? 5 : 4;
   }
 
   @override
@@ -92,7 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF78A2D2).withValues(alpha: 0.8),
+        backgroundColor: const Color(0xFF4F8FDB).withValues(alpha: 0.8),
         elevation: 2,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         duration: const Duration(seconds: 2),
@@ -122,20 +134,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -165,38 +167,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ]),
                     const SizedBox(height: 12),
-                    _buildMenuSection(
-                      'ห้องพัก',
-                      widget.isRoommate
-                          ? [
-                              _MenuItem(
-                                svgIcon: 'assets/images/icon_house_user.svg',
-                                label: 'สมาชิกในห้อง',
-                                showArrow: true,
-                                onTap: widget.onNavigateToRoomMembers,
-                              ),
-                              _MenuItem(
-                                icon: Icons.logout,
-                                label: 'ออกจากห้อง',
-                                showArrow: true,
-                                onTap: widget.onLeaveRoom,
-                              ),
-                            ]
-                          : [
-                              _MenuItem(
-                                svgIcon: 'assets/images/icon_note_done.svg',
-                                label: 'ข้อมูลการเช่า',
-                                showArrow: true,
-                                onTap: widget.onNavigateToRentalInfo,
-                              ),
-                              _MenuItem(
-                                svgIcon: 'assets/images/icon_house_user.svg',
-                                label: 'สมาชิกในห้อง',
-                                showArrow: true,
-                                onTap: widget.onNavigateToRoomMembers,
-                              ),
-                            ],
-                    ),
+                    // ห้องพัก (ซ่อนสำหรับแอดมิน)
+                    if (!widget.isAdmin)
+                      _buildMenuSection(
+                        'ห้องพัก',
+                        widget.isRoommate
+                            ? [
+                                _MenuItem(
+                                  svgIcon: 'assets/images/icon_house_user.svg',
+                                  label: 'สมาชิกในห้อง',
+                                  showArrow: true,
+                                  onTap: widget.onNavigateToRoomMembers,
+                                ),
+                                _MenuItem(
+                                  icon: Icons.logout,
+                                  label: 'ออกจากห้อง',
+                                  showArrow: true,
+                                  onTap: widget.onLeaveRoom,
+                                ),
+                              ]
+                            : [
+                                _MenuItem(
+                                  svgIcon: 'assets/images/icon_note_done.svg',
+                                  label: 'ข้อมูลการเช่า',
+                                  showArrow: true,
+                                  onTap: widget.onNavigateToRentalInfo,
+                                ),
+                                _MenuItem(
+                                  svgIcon: 'assets/images/icon_house_user.svg',
+                                  label: 'สมาชิกในห้อง',
+                                  showArrow: true,
+                                  onTap: widget.onNavigateToRoomMembers,
+                                ),
+                              ],
+                      ),
                     // การ์ดสมัครเป็นผู้เช่าหลัก (roommate เท่านั้น)
                     if (widget.isRoommate) ...[
                       const SizedBox(height: 8),
@@ -267,20 +271,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _MenuItem(
                         svgIcon: 'assets/images/icon_bell.svg',
                         label: 'การแจ้งเตือน',
-                        showArrow: false,
-                        trailing: SizedBox(
-                          height: 24,
-                          child: Transform.scale(
-                            scale: 0.6,
-                            alignment: Alignment.centerRight,
-                            child: Switch(
-                              value: _notificationEnabled,
-                              onChanged: (val) =>
-                                  setState(() => _notificationEnabled = val),
-                              activeColor: const Color(0xFF78A2D2),
-                            ),
-                          ),
-                        ),
+                        showArrow: true,
+                        onTap: widget.onNavigateToNotification,
                       ),
                     ]),
                     const SizedBox(height: 12),
@@ -353,7 +345,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : const Icon(
                           Icons.person_outline,
                           size: 40,
-                          color: Color(0xFF78A2D2),
+                          color: Color(0xFF4F8FDB),
                         ),
                 ),
               ),
@@ -366,7 +358,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 22,
                     height: 22,
                     decoration: const BoxDecoration(
-                      color: Color(0xFF78A2D2),
+                      color: Color(0xFF4F8FDB),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -389,15 +381,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: Color(0xFF000000),
             ),
           ),
-          const SizedBox(height: 2),
-          const Text(
-            'ห้อง A301',
-            style: TextStyle(
-              fontFamily: 'Prompt',
-              fontSize: 15,
-              color: Color(0xFF666666),
+          if (!widget.isAdmin) ...[
+            const SizedBox(height: 2),
+            const Text(
+              'ห้อง A301',
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 15,
+                color: Color(0xFF666666),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -431,6 +425,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFD9D9D9),
+                        width: 1,
+                      ),
                     ),
                     padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
                     child: Row(
@@ -444,7 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(width: 10),
                         ] else if (item.icon != null) ...[
                           Icon(item.icon,
-                              size: 24, color: const Color(0xFF78A2D2)),
+                              size: 24, color: const Color(0xFF4F8FDB)),
                           const SizedBox(width: 10),
                         ],
                         Expanded(
@@ -457,7 +455,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                         ),
-                        if (item.trailing != null) item.trailing!,
                         if (item.showArrow)
                           const Icon(Icons.chevron_right,
                               size: 22, color: Color(0xFF000000)),
@@ -504,7 +501,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF78A2D2)),
+                          side: const BorderSide(color: Color(0xFF4F8FDB)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -515,7 +512,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                           ),
                         ),
                       ),
@@ -528,7 +525,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           widget.onLogout?.call();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF78A2D2),
+                          backgroundColor: const Color(0xFF4F8FDB),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -557,13 +554,110 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ---- Bottom Navigation ----
   Widget _buildBottomNav() {
+    if (widget.isAdmin) {
+      return _buildAdminBottomNav();
+    }
+    return _buildUserBottomNav();
+  }
+
+  // แถบเมนูฝั่งแอดมิน (6 ไอคอน, width 320, activeIndex=5)
+  Widget _buildAdminBottomNav() {
+    const navWidth = 320.0;
+    const itemCount = 6;
+    const circleSize = 40.0;
+    final slot = navWidth / itemCount;
+    final indicatorLeft = slot * _selectedIndex + (slot - circleSize) / 2;
+
+    final svgPaths = <int, String>{
+      0: 'assets/images/icon_home.svg',
+      1: 'assets/images/persons.svg',
+      2: 'assets/images/icon_bill.svg',
+      4: 'assets/images/icon_announcement.svg',
+      5: 'assets/images/icon_user.svg',
+    };
+    final materialIcons = <int, IconData>{
+      3: Icons.build_outlined,
+    };
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        width: navWidth,
+        height: 52,
+        decoration: BoxDecoration(
+          color: const Color(0xFF4F8FDB),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 200),
+              left: indicatorLeft,
+              top: 6,
+              child: Container(
+                width: circleSize,
+                height: circleSize,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEFFAF),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Row(
+              children: List.generate(itemCount, (i) {
+                final isActive = i == _selectedIndex;
+                final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedIndex = i);
+                    if (i == 0 && widget.onNavigateToDashboard != null) {
+                      widget.onNavigateToDashboard!();
+                    } else if (i == 1 && widget.onNavigateToTenant != null) {
+                      widget.onNavigateToTenant!();
+                    } else if (i == 3 && widget.onNavigateToReportRepair != null) {
+                      widget.onNavigateToReportRepair!();
+                    }
+                  },
+                  child: SizedBox(
+                    width: slot,
+                    height: 52,
+                    child: Center(
+                      child: svgPaths.containsKey(i)
+                          ? SvgPicture.asset(
+                              svgPaths[i]!,
+                              width: 24,
+                              height: 24,
+                              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                            )
+                          : Icon(materialIcons[i], size: 22, color: color),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // แถบเมนูฝั่งผู้เช่า (5 ไอคอน, width 280, activeIndex=4)
+  Widget _buildUserBottomNav() {
     return Center(
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         width: 280,
         height: 52,
         decoration: BoxDecoration(
-          color: const Color(0xFF78A2D2),
+          color: const Color(0xFF4F8FDB),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -623,8 +717,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final isActive = i == _selectedIndex;
       return GestureDetector(
         onTap: () {
-          if (i == 0 && widget.onNavigateToHome != null) {
-            widget.onNavigateToHome!();
+          if (i == 0) {
+            if (widget.isAdmin && widget.onNavigateToDashboard != null) {
+              widget.onNavigateToDashboard!();
+            } else if (widget.onNavigateToHome != null) {
+              widget.onNavigateToHome!();
+            }
           } else if (i == 1 && widget.onNavigateToRentalFee != null) {
             widget.onNavigateToRentalFee!();
           } else if (i == 2 && widget.onNavigateToChat != null) {
@@ -645,13 +743,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: 26,
                     height: 26,
                     colorFilter: ColorFilter.mode(
-                      isActive ? const Color(0xFF78A2D2) : Colors.white,
+                      isActive ? const Color(0xFF4F8FDB) : Colors.white,
                       BlendMode.srcIn,
                     ),
                   )
                 : Icon(
                     items[i],
-                    color: isActive ? const Color(0xFF78A2D2) : Colors.white,
+                    color: isActive ? const Color(0xFF4F8FDB) : Colors.white,
                     size: 22,
                   ),
           ),
@@ -666,7 +764,6 @@ class _MenuItem {
   final String? svgIcon;
   final String label;
   final bool showArrow;
-  final Widget? trailing;
   final VoidCallback? onTap;
 
   _MenuItem({
@@ -674,7 +771,6 @@ class _MenuItem {
     this.svgIcon,
     required this.label,
     this.showArrow = false,
-    this.trailing,
     this.onTap,
   });
 }

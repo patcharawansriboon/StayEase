@@ -34,7 +34,7 @@ class SendRequestScreen extends StatelessWidget {
             child: Container(
               width: double.infinity,
               decoration: const BoxDecoration(
-                color: Color(0xFF78A2D2),
+                color: Color(0xFFBCDEFB),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(32),
                   topRight: Radius.circular(32),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 
@@ -94,7 +95,7 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
           child: Container(
             width: double.infinity,
             decoration: const BoxDecoration(
-              color: Color(0xFF78A2D2),
+              color: Color(0xFFBCDEFB),
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(32),
                 topRight: Radius.circular(32),
@@ -154,16 +155,10 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // รหัสคำเชิญ (สำหรับ Roommate)
+// รหัสคำเชิญ (สำหรับ Roommate)
                   Row(
                     children: [
-                      const Text(
-                        'รหัสคำเชิญ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF000000),
-                        ),
-                      ),
+                      _buildLabel('รหัสคำเชิญ'),
                       const SizedBox(width: 6),
                       Text(
                         '(สำหรับ Roommate)',
@@ -224,34 +219,62 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ปุ่มสมัครสมาชิก
-                  Center(
-                    child: SizedBox(
-                      width: 214,
-                      height: 52,
-                      child: TextButton(
-                        onPressed: () {
-                          widget.onInviteCodeChanged
-                              ?.call(_inviteCodeController.text.isNotEmpty);
-                          widget.onUserDataChanged?.call(
-                            _nameController.text,
-                            _phoneController.text,
+                  // ปุ่มสมัครใช้งาน
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: TextButton(
+                      onPressed: () async {
+                        widget.onInviteCodeChanged
+                            ?.call(_inviteCodeController.text.isNotEmpty);
+                        widget.onUserDataChanged?.call(
+                          _nameController.text,
+                          _phoneController.text,
+                        );
+                        bool success = false;
+                        if (_inviteCodeController.text.isNotEmpty) {
+                          success = await AuthService().signUpRoommate(
+                            phone: _phoneController.text,
+                            password: _passwordController.text,
+                            fullName: _nameController.text,
+                            inviteCode: _inviteCodeController.text,
                           );
+                        } else {
+                          success = await AuthService().signUpTenant(
+                            phone: _phoneController.text,
+                            password: _passwordController.text,
+                            fullName: _nameController.text,
+                            dormCode: _dormCodeController.text,
+                          );
+                        }
+                        if (success) {
                           widget.onNavigateToVerify(_phoneController.text);
-                        },
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
+                        } else {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'ลงทะเบียนไม่สำเร็จ กรุณาลองอีกครั้ง',
+                                style: TextStyle(fontFamily: 'Prompt'),
+                              ),
+                              backgroundColor: const Color(0xFFFF0303),
+                            ),
+                          );
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFF5B93D4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Text(
-                          'สมัครสมาชิก',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF78A2D2),
-                          ),
+                      ),
+                      child: const Text(
+                        'สมัครใช้งาน',
+                        style: TextStyle(
+                          fontFamily: 'Prompt',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -263,9 +286,10 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
-                        'มีบัญชีอยู่แล้ว? ',
+                        'มีบัญชีอยู่แล้ว?  ',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontFamily: 'Prompt',
+                          fontSize: 14,
                           color: Color(0xFF000000),
                         ),
                       ),
@@ -274,11 +298,12 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
                         child: const Text(
                           'เข้าสู่ระบบ',
                           style: TextStyle(
+                            fontFamily: 'Prompt',
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFFFEFFAF),
+                            color: Color(0xFF4181CB),
                             decoration: TextDecoration.underline,
-                            decorationColor: Color(0xFFFEFFAF),
+                            decorationColor: Color(0xFF4181CB),
                           ),
                         ),
                       ),
@@ -297,6 +322,7 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
     return Text(
       text,
       style: const TextStyle(
+        fontFamily: 'Prompt',
         fontSize: 12,
         color: Color(0xFF000000),
       ),
@@ -336,19 +362,19 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: borderColor, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: borderColor, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
             color: hasError == true
                 ? const Color(0xFFFF0303)
-                : const Color(0xFF78A2D2),
+                : const Color(0xFF4F8FDB),
             width: 1.5,
           ),
         ),

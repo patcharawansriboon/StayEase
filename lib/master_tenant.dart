@@ -259,7 +259,7 @@ class MasterTenantScreen extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: onEdit,
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF78A2D2)),
+                  side: const BorderSide(color: Color(0xFF4F8FDB)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -269,7 +269,7 @@ class MasterTenantScreen extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Prompt',
                     fontSize: 15,
-                    color: Color(0xFF78A2D2),
+                    color: Color(0xFF4F8FDB),
                   ),
                 ),
               ),

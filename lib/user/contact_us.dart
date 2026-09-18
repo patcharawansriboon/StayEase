@@ -8,20 +8,10 @@ class ContactUsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -37,7 +27,7 @@ class ContactUsScreen extends StatelessWidget {
                       height: 170,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF78A2D2).withValues(alpha: 0.2),
+                        color: const Color(0xFF4F8FDB).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -146,6 +136,10 @@ class ContactUsScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFD9D9D9),
+            width: 1,
+          ),
         ),
         child: Row(
           children: [

@@ -91,20 +91,10 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -124,7 +114,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                             shape: BoxShape.circle,
                             color: Colors.white,
                             border: Border.all(
-                                color: const Color(0xFF78A2D2), width: 2),
+                                color: const Color(0xFF4F8FDB), width: 2),
                           ),
                           child: ClipOval(
                             child: _profileImage != null
@@ -132,7 +122,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                                 : const Icon(
                                     Icons.person_outline,
                                     size: 32,
-                                    color: Color(0xFF78A2D2),
+                                    color: Color(0xFF4F8FDB),
                                   ),
                           ),
                         ),
@@ -145,7 +135,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                               width: 20,
                               height: 20,
                               decoration: const BoxDecoration(
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.camera_alt,
@@ -273,13 +263,17 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
     bool showEdit = true,
     VoidCallback? onEdit,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+return Container(
+       width: double.infinity,
+       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+       decoration: BoxDecoration(
+         color: Colors.white,
+         borderRadius: BorderRadius.circular(16),
+         border: Border.all(
+           color: const Color(0xFFD9D9D9),
+           width: 1,
+         ),
+       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -289,7 +283,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
               if (svgIcon != null)
                 SvgPicture.asset(svgIcon, width: 26, height: 26)
               else
-                Icon(icon, size: 18, color: const Color(0xFF78A2D2)),
+                Icon(icon, size: 18, color: const Color(0xFF4F8FDB)),
               const SizedBox(width: 6),
               Text(
                 title,
@@ -297,7 +291,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                   fontFamily: 'Prompt',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF78A2D2),
+                  color: Color(0xFF4F8FDB),
                 ),
               ),
               const Spacer(),
@@ -309,7 +303,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                     width: 24,
                     height: 24,
                     colorFilter: const ColorFilter.mode(
-                      Color(0xFF78A2D2),
+                      Color(0xFF4F8FDB),
                       BlendMode.srcIn,
                     ),
                   ),
@@ -372,13 +366,17 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
         ? <String>[]
         : raw.split('\n').where((e) => e.trim().isNotEmpty).toList();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+return Container(
+       width: double.infinity,
+       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+       decoration: BoxDecoration(
+         color: Colors.white,
+         borderRadius: BorderRadius.circular(16),
+         border: Border.all(
+           color: const Color(0xFFD9D9D9),
+           width: 1,
+         ),
+       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -393,7 +391,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                   fontFamily: 'Prompt',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF78A2D2),
+                  color: Color(0xFF4F8FDB),
                 ),
               ),
               const Spacer(),
@@ -404,7 +402,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                   width: 24,
                   height: 24,
                   colorFilter: const ColorFilter.mode(
-                    Color(0xFF78A2D2),
+                    Color(0xFF4F8FDB),
                     BlendMode.srcIn,
                   ),
                 ),

@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 
 class SignInScreen extends StatefulWidget {
   final VoidCallback onBack;
-  final VoidCallback onSignIn;
+  final void Function(String name, String phone) onSignIn;
+  final void Function(String name, String phone) onSignInAsAdmin;
 
   const SignInScreen({
     super.key,
     required this.onBack,
     required this.onSignIn,
+    required this.onSignInAsAdmin,
   });
 
   @override
@@ -68,14 +71,14 @@ class _SignInScreenState extends State<SignInScreen> {
           child: Container(
             width: double.infinity,
             decoration: const BoxDecoration(
-              color: Color(0xFF78A2D2),
+              color: Color(0xFFBCDEFB),
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(32),
                 topRight: Radius.circular(32),
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(38, 30, 38, 0),
+              padding: const EdgeInsets.fromLTRB(16, 30, 16, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -125,24 +128,58 @@ class _SignInScreenState extends State<SignInScreen> {
                   const SizedBox(height: 70),
 
                   // ปุ่มเข้าสู่ระบบ
-                  Center(
-                    child: SizedBox(
-                      width: 214,
-                      height: 42,
-                      child: TextButton(
-                        onPressed: widget.onSignIn,
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: TextButton(
+                      onPressed: () async {
+                        final result = await AuthService().signIn(
+                          phone: _phoneController.text,
+                          password: _passwordController.text,
+                        );
+                        final role = result['role'] ?? '';
+                        final name = result['full_name'] ?? '';
+                        final phone = result['phone'] ?? '';
+                        if (!mounted) return;
+                        if (role == 'admin') {
+                          widget.onSignInAsAdmin(name, phone);
+                        } else if (role == 'tenant' || role == 'roommate') {
+                          widget.onSignIn(name, phone);
+                        } else if (role == 'error') {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'เบอร์โทรศัพท์หรือรหัสผ่านไม่ถูกต้อง',
+                                style: TextStyle(fontFamily: 'Prompt'),
+                              ),
+                              backgroundColor: const Color(0xFFFF0303),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'ยังไม่พบบัญชีผู้ใช้นี้',
+                                style: TextStyle(fontFamily: 'Prompt'),
+                              ),
+                              backgroundColor: const Color(0xFFFF0303),
+                            ),
+                          );
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFF5B93D4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Text(
-                          'เข้าสู่ระบบ',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFF78A2D2),
-                          ),
+                      ),
+                      child: const Text(
+                        'เข้าสู่ระบบ',
+                        style: TextStyle(
+                          fontFamily: 'Prompt',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -204,17 +241,17 @@ class _SignInScreenState extends State<SignInScreen> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: Color(0xFFD9D9D9), width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: Color(0xFFD9D9D9), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           borderSide:
-              const BorderSide(color: Color(0xFF78A2D2), width: 1.5),
+              const BorderSide(color: Color(0xFFBCDEFB), width: 1.5),
         ),
       ),
     );

@@ -1,16 +1,62 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class RoommateRequestScreen extends StatelessWidget {
+class RoommateRequestScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
+  final String roommateId;
+  final String fullName;
+  final String phone;
+  final String dormCode;
+  final String tenantRoom;
+  final String requestDate;
 
   const RoommateRequestScreen({
     super.key,
     this.onBack,
     this.onApprove,
     this.onReject,
+    this.roommateId = '',
+    this.fullName = 'พัชราวรรณ  ศรีบุญ',
+    this.phone = '098-9890000',
+    this.dormCode = 'STAY01',
+    this.tenantRoom = 'A101',
+    this.requestDate = '8 ก.ย. 2569 เวลา 09:25 น.',
   });
+
+  @override
+  State<RoommateRequestScreen> createState() => _RoommateRequestScreenState();
+}
+
+class _RoommateRequestScreenState extends State<RoommateRequestScreen> {
+  bool _isLoading = false;
+
+  Future<void> _handleApprove() async {
+    if (widget.roommateId.isEmpty) { widget.onApprove?.call(); return; }
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client
+          .from('roommates')
+          .update({'status': 'กำลังเช่า', 'is_verified': true})
+          .eq('id', widget.roommateId);
+    } catch (_) {}
+    setState(() => _isLoading = false);
+    widget.onApprove?.call();
+  }
+
+  Future<void> _handleReject() async {
+    if (widget.roommateId.isEmpty) { widget.onReject?.call(); return; }
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client
+          .from('roommates')
+          .update({'status': 'rejected'})
+          .eq('id', widget.roommateId);
+    } catch (_) {}
+    setState(() => _isLoading = false);
+    widget.onReject?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,17 +75,17 @@ class RoommateRequestScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   _buildSection(
                     title: 'ข้อมูลส่วนตัว',
-                    rows: const [
-                      ['ชื่อ-นามสกุล', 'พัชราวรรณ  ศรีบุญ'],
-                      ['เบอร์มือถือ', '098-9890000'],
+                    rows: [
+                      ['ชื่อ-นามสกุล', widget.fullName],
+                      ['เบอร์มือถือ', widget.phone],
                     ],
                   ),
                   const SizedBox(height: 12),
                   _buildSection(
                     title: 'ข้อมูลการเข้าพัก',
-                    rows: const [
-                      ['รหัสหอพัก', 'STAY123'],
-                      ['ห้องที่ต้องการ', 'A303'],
+                    rows: [
+                      ['รหัสหอพัก', widget.dormCode],
+                      ['ห้องที่ต้องการ', widget.tenantRoom],
                       ['ประเภท', 'Roommate'],
                     ],
                   ),
@@ -65,40 +111,20 @@ class RoommateRequestScreen extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'พัชราวรรณ  ศรีบุญ',
-              style: TextStyle(
-                fontFamily: 'Prompt',
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF000000),
-              ),
+            Text(
+              widget.fullName,
+              style: const TextStyle(fontFamily: 'Prompt', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF000000)),
             ),
             const SizedBox(height: 4),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CBB17),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'ขอร่วมห้อง',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 11,
-                  color: Colors.white,
-                ),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(color: const Color(0xFF4CBB17), borderRadius: BorderRadius.circular(20)),
+              child: const Text('ขอร่วมห้อง', style: TextStyle(fontFamily: 'Prompt', fontSize: 11, color: Colors.white)),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'วันที่ส่ง 8 ก.ย. 2569 เวลา 09:25 น.',
-              style: TextStyle(
-                fontFamily: 'Prompt',
-                fontSize: 12,
-                color: Color(0xFF999999),
-              ),
+            Text(
+              'วันที่ส่ง ${widget.requestDate}',
+              style: const TextStyle(fontFamily: 'Prompt', fontSize: 12, color: Color(0xFF999999)),
             ),
           ],
         ),
@@ -175,10 +201,10 @@ class RoommateRequestScreen extends StatelessWidget {
             child: SizedBox(
               height: 50,
               child: OutlinedButton(
-                onPressed: onApprove,
+                onPressed: _isLoading ? null : _handleApprove,
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFF78A2D2)),
+                  side: const BorderSide(color: Color(0xFF4F8FDB)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -188,7 +214,7 @@ class RoommateRequestScreen extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Prompt',
                     fontSize: 15,
-                    color: Color(0xFF78A2D2),
+                    color: Color(0xFF4F8FDB),
                   ),
                 ),
               ),
@@ -199,7 +225,7 @@ class RoommateRequestScreen extends StatelessWidget {
             child: SizedBox(
               height: 50,
               child: ElevatedButton(
-                onPressed: onReject,
+                onPressed: _isLoading ? null : _handleReject,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF16C6C),
                   shape: RoundedRectangleBorder(
@@ -229,7 +255,7 @@ class RoommateRequestScreen extends StatelessWidget {
       child: Row(
         children: [
           GestureDetector(
-            onTap: onBack,
+            onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
               size: 24,

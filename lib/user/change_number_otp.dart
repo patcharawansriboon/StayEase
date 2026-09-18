@@ -63,20 +63,10 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -158,8 +148,8 @@ class _OtpScreenState extends State<OtpScreen> {
                 child: ElevatedButton(
                   onPressed: _isOtpComplete() ? widget.onConfirm : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF78A2D2),
-                    disabledBackgroundColor: const Color(0xFF78A2D2).withValues(alpha: 0.4),
+                    backgroundColor: const Color(0xFF4F8FDB),
+                    disabledBackgroundColor: const Color(0xFF4F8FDB).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -203,16 +193,16 @@ class _OtpScreenState extends State<OtpScreen> {
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide.none,
-          ),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFD9D9D9), width: 1),  // ← เพิ่ม D9D9D9
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFD9D9D9), width: 1),  // ← เพิ่ม D9D9D9
+        ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF78A2D2), width: 1.5),
+            borderSide: const BorderSide(color: Color(0xFF4F8FDB), width: 1.5),
           ),
         ),
         onChanged: (val) {

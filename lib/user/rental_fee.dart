@@ -10,6 +10,7 @@ class RentalFeeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToChat;
   final VoidCallback? onNavigateToAnnounce;
   final VoidCallback? onNavigateToProfile;
+  final Map<String, dynamic> currentBill;
 
   const RentalFeeScreen({
     super.key,
@@ -21,6 +22,7 @@ class RentalFeeScreen extends StatefulWidget {
     this.onNavigateToChat,
     this.onNavigateToAnnounce,
     this.onNavigateToProfile,
+    this.currentBill = const {},
   });
 
   @override
@@ -41,8 +43,8 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
+return Scaffold(
+      backgroundColor: Colors.white,
       body: GestureDetector(
         onTap: _showDropdown ? _closeDropdown : null,
         behavior: HitTestBehavior.translucent,
@@ -50,17 +52,7 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
           children: [
             Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -164,7 +156,7 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
             // Blue background
             Container(
               height: 140,
-              color: const Color(0xFF78A2D2),
+              color: const Color(0xFF4F8FDB),
             ),
             // White bottom section
             Positioned(
@@ -205,9 +197,9 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'กรกฎาคม 2569',
-                            style: TextStyle(
+                          Text(
+                            widget.currentBill['month'] ?? 'กรกฎาคม 2569',
+                            style: const TextStyle(
                               fontFamily: 'Prompt',
                               fontSize: 12,
                               color: Colors.white,
@@ -216,18 +208,20 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                           const SizedBox(height: 4),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
-                            children: const [
+                            children: [
                               Text(
-                                '5,090',
-                                style: TextStyle(
+                                widget.currentBill['total'] != null
+                                    ? '${widget.currentBill['total']}'
+                                    : '5,090',
+                                style: const TextStyle(
                                   fontFamily: 'Prompt',
                                   fontSize: 20,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFFFEFFAF),
                                 ),
                               ),
-                              SizedBox(width: 7),
-                              Padding(
+                              const SizedBox(width: 7),
+                              const Padding(
                                 padding: EdgeInsets.only(bottom: 2),
                                 child: Text(
                                   'บาท',
@@ -261,9 +255,9 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Text(
-                        'รอชำระ',
-                        style: TextStyle(
+                      Text(
+                        widget.currentBill['status_label'] ?? 'รอชำระ',
+                        style: const TextStyle(
                           fontFamily: 'Prompt',
                           fontSize: 12,
                           color: Colors.white,
@@ -278,9 +272,9 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                       const Icon(Icons.calendar_month_outlined,
                           size: 13, color: Colors.white),
                       const SizedBox(width: 4),
-                      const Text(
-                        'ครบกำหนด  5 สิงหาคม 2569',
-                        style: TextStyle(
+                      Text(
+                        'ครบกำหนด  ${widget.currentBill['due_date'] ?? '5 สิงหาคม 2569'}',
+                        style: const TextStyle(
                           fontFamily: 'Prompt',
                           fontSize: 12,
                           color: Colors.white,
@@ -301,7 +295,7 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             border: Border.all(
-                                color: const Color(0xFF78A2D2)),
+                                color: const Color(0xFF4F8FDB)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Center(
@@ -310,7 +304,7 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                               style: TextStyle(
                                 fontFamily: 'Prompt',
                                 fontSize: 10,
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                               ),
                             ),
                           ),
@@ -323,7 +317,7 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                           width: 70,
                           height: 23,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF78A2D2),
+                            color: const Color(0xFF4F8FDB),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Center(
@@ -357,7 +351,7 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
         width: 280,
         height: 52,
         decoration: BoxDecoration(
-          color: const Color(0xFF78A2D2),
+          color: const Color(0xFF4F8FDB),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -496,13 +490,13 @@ class _RentalFeeScreenState extends State<RentalFeeScreen> {
                     width: 26,
                     height: 26,
                     colorFilter: ColorFilter.mode(
-                      isActive ? const Color(0xFF78A2D2) : Colors.white,
+                      isActive ? const Color(0xFF4F8FDB) : Colors.white,
                       BlendMode.srcIn,
                     ),
                   )
                 : Icon(
                     items[i],
-                    color: isActive ? const Color(0xFF78A2D2) : Colors.white,
+                    color: isActive ? const Color(0xFF4F8FDB) : Colors.white,
                     size: 22,
                   ),
           ),

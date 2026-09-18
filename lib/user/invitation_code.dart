@@ -36,20 +36,10 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -91,7 +81,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                           TextSpan(text: 'รหัสเชิญจะผูกกับ'),
                           TextSpan(
                             text: 'ห้อง 301',
-                            style: TextStyle(color: Color(0xFF78A2D2)),
+                            style: TextStyle(color: Color(0xFF4F8FDB)),
                           ),
                           TextSpan(text: ' โดยอัตโนมัติ'),
                         ],
@@ -100,13 +90,17 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                     const SizedBox(height: 24),
 
                     // Code box
-                    Container(
-                      width: double.infinity,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+Container(
+                       width: double.infinity,
+                       height: 90,
+                       decoration: BoxDecoration(
+                         color: Colors.white,
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(
+                           color: const Color(0xFFD9D9D9),
+                           width: 1,
+                         ),
+                       ),
                       child: Stack(
                         children: [
                           Center(
@@ -129,7 +123,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                               child: const Icon(
                                 Icons.copy_outlined,
                                 size: 20,
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                               ),
                             ),
                           ),
@@ -150,7 +144,7 @@ class _InvitationCodeScreenState extends State<InvitationCodeScreen> {
                 child: ElevatedButton(
                   onPressed: _generateCode,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF78A2D2),
+                    backgroundColor: const Color(0xFF4F8FDB),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),

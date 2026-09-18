@@ -221,7 +221,7 @@ class _MapScreenState extends State<MapScreen> {
                       height: 40,
                       child: const Icon(
                         Icons.location_on,
-                        color: Color(0xFF78A2D2),
+                        color: Color(0xFF4F8FDB),
                         size: 36,
                       ),
                     ),
@@ -368,12 +368,12 @@ class _MapScreenState extends State<MapScreen> {
                                         height: 20,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Color(0xFF78A2D2),
+                                          color: Color(0xFF4F8FDB),
                                         ),
                                       )
                                     : const Icon(Icons.location_on_outlined,
                                         size: 22,
-                                        color: Color(0xFF78A2D2)),
+                                        color: Color(0xFF4F8FDB)),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
@@ -425,7 +425,7 @@ class _MapScreenState extends State<MapScreen> {
                             widget.onBack?.call();
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF78A2D2),
+                            backgroundColor: const Color(0xFF4F8FDB),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),

@@ -3,30 +3,28 @@ import 'package:flutter/material.dart';
 class RoomMembersScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onNavigateToInvitationCode;
+  final String roomNumber;
+  final String building;
+  final int floor;
+  final List<Map<String, String>> members;
 
   const RoomMembersScreen({
     super.key,
     this.onBack,
     this.onNavigateToInvitationCode,
+    this.roomNumber = 'A101',
+    this.building = 'A',
+    this.floor = 1,
+    this.members = const [],
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -38,14 +36,18 @@ class RoomMembersScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Room info card
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+Container(
+                       width: double.infinity,
+                       padding: const EdgeInsets.symmetric(
+                           horizontal: 16, vertical: 14),
+                       decoration: BoxDecoration(
+                         color: Colors.white,
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(
+                           color: const Color(0xFFD9D9D9),
+                           width: 1,
+                         ),
+                       ),
                       child: Row(
                         children: [
                           Container(
@@ -62,12 +64,12 @@ class RoomMembersScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'ห้อง 301',
+                                  'ห้อง $roomNumber',
                                   style: TextStyle(
                                     fontFamily: 'Prompt',
                                     fontSize: 14,
@@ -77,7 +79,7 @@ class RoomMembersScreen extends StatelessWidget {
                                 ),
                                 SizedBox(height: 2),
                                 Text(
-                                  'หอพัก StayEase • อาคาร A ชั้น 3',
+                                  'หอพัก StayEase • อาคาร $building ชั้น $floor',
                                   style: TextStyle(
                                     fontFamily: 'Prompt',
                                     fontSize: 12,
@@ -94,12 +96,12 @@ class RoomMembersScreen extends StatelessWidget {
                               color: const Color(0xFFEEF4FB),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Text(
-                              '2/3',
+                            child: Text(
+                              '${members.length}/3',
                               style: TextStyle(
                                 fontFamily: 'Prompt',
                                 fontSize: 13,
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -118,7 +120,7 @@ class RoomMembersScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF78A2D2),
+                          color: const Color(0xFF4F8FDB),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -149,43 +151,31 @@ class RoomMembersScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFD9D9D9), width: 1),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ผู้เช่าหลัก
-                          const Text(
-                            'ผู้เช่าหลัก',
-                            style: TextStyle(
-                              fontFamily: 'Prompt',
-                              fontSize: 12,
-                              color: Color(0xFF888888),
+                          for (int i = 0; i < members.length; i++) ...[
+                            if (i > 0)
+                              const Divider(height: 24, color: Color(0xFFF0F0F0)),
+                            Text(
+                              members[i]['role'] == 'ผู้เช่าหลัก' ? 'ผู้เช่าหลัก' : 'Roommate',
+                              style: const TextStyle(fontFamily: 'Prompt', fontSize: 12, color: Color(0xFF888888)),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildMemberRow(
-                            name: 'พัชราวรรณ  ศรีบุญ',
-                            phone: '099-000000',
-                            imageAsset: 'assets/images/user_avatar.png',
-                          ),
-                          const Divider(
-                              height: 24, color: Color(0xFFF0F0F0)),
-
-                          // Roommate
-                          const Text(
-                            'Roommate',
-                            style: TextStyle(
-                              fontFamily: 'Prompt',
-                              fontSize: 12,
-                              color: Color(0xFF888888),
+                            const SizedBox(height: 10),
+                            _buildMemberRow(
+                              name:  members[i]['name']  ?? '-',
+                              phone: members[i]['phone'] ?? '-',
+                              imageAsset: 'assets/images/user_avatar.png',
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildMemberRow(
-                            name: 'พัชราวรรณ  ศรีบุญ',
-                            phone: '099-000000',
-                            imageAsset: 'assets/images/user_avatar.png',
-                          ),
+                          ],
+                          // fallback ถ้าไม่มีข้อมูล
+                          if (members.isEmpty) ...[
+                            const Text('ผู้เช่าหลัก', style: TextStyle(fontFamily: 'Prompt', fontSize: 12, color: Color(0xFF888888))),
+                            const SizedBox(height: 10),
+                            _buildMemberRow(name: 'พัชราวรรณ  ศรีบุญ', phone: '099-9999999', imageAsset: 'assets/images/user_avatar.png'),
+                          ],
                         ],
                       ),
                     ),

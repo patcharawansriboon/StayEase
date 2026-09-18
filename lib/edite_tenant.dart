@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class EditeTenantScreen extends StatefulWidget {
@@ -23,6 +24,134 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   final _checkOutController = TextEditingController();
   final _rentController = TextEditingController();
   final _depositController = TextEditingController();
+
+  final List<String> _months = [
+    'ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย',
+    'ก.ค', 'ส.ค', 'ก.ย', 'ต.ค', 'พ.ย', 'ธ.ค'
+  ];
+
+  final List<String> _monthsFull = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+
+  int _selectedDay = 1;
+  int _selectedMonth = 0;
+  int _selectedYear = 2568;
+
+  void _showDatePicker(TextEditingController controller) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SizedBox(
+              height: 280,
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD9D9D9),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            controller.text =
+                                '$_selectedDay ${_monthsFull[_selectedMonth]} $_selectedYear';
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          'ตกลง',
+                          style: TextStyle(
+                            fontFamily: 'Prompt',
+                            fontSize: 14,
+                            color: Color(0xFF4F8FDB),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                                initialItem: _selectedDay - 1),
+                            itemExtent: 40,
+                            looping: true,
+                            onSelectedItemChanged: (i) =>
+                                setModalState(() => _selectedDay = (i % 31) + 1),
+                            children: List.generate(31,
+                                (i) => _pickerItem('${i + 1}')),
+                          ),
+                        ),
+                        Expanded(
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                                initialItem: _selectedMonth),
+                            itemExtent: 40,
+                            looping: true,
+                            onSelectedItemChanged: (i) =>
+                                setModalState(() => _selectedMonth = i % 12),
+                            children: _months
+                                .map((m) => _pickerItem(m))
+                                .toList(),
+                          ),
+                        ),
+                        Expanded(
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                                initialItem: _selectedYear - 2540),
+                            itemExtent: 40,
+                            looping: true,
+                            onSelectedItemChanged: (i) =>
+                                setModalState(() => _selectedYear = (i % 30) + 2540),
+                            children: List.generate(
+                                30,
+                                (i) => _pickerItem('${i + 2540}')),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _pickerItem(String text) {
+    return Center(
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: 'Prompt',
+          fontSize: 16,
+          color: Color(0xFF000000),
+        ),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -173,12 +302,28 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           _buildUnderlineInput(_floorController, 'กรุณากรอกเลขชั้น'),
           const SizedBox(height: 12),
           _buildLabel('วันที่เข้าพัก'),
-          _buildUnderlineInput(_checkInController, 'กรุณากรอกวันที่เริ่มสัญญา',
-              suffixIcon: Icons.calendar_month_outlined),
+          GestureDetector(
+            onTap: () => _showDatePicker(_checkInController),
+            child: AbsorbPointer(
+              child: _buildUnderlineInput(_checkInController, 'กรุณากรอกวันที่เริ่มสัญญา',
+                  suffixIcon: GestureDetector(
+                    onTap: () => _showDatePicker(_checkInController),
+                    child: const Icon(Icons.calendar_month_outlined, size: 18, color: Color(0xFF999999)),
+                  )),
+            ),
+          ),
           const SizedBox(height: 12),
           _buildLabel('วันที่สิ้นสุด'),
-          _buildUnderlineInput(_checkOutController, 'กรุณากรอกวันที่หมดสัญญา',
-              suffixIcon: Icons.calendar_month_outlined),
+          GestureDetector(
+            onTap: () => _showDatePicker(_checkOutController),
+            child: AbsorbPointer(
+              child: _buildUnderlineInput(_checkOutController, 'กรุณากรอกวันที่หมดสัญญา',
+                  suffixIcon: GestureDetector(
+                    onTap: () => _showDatePicker(_checkOutController),
+                    child: const Icon(Icons.calendar_month_outlined, size: 18, color: Color(0xFF999999)),
+                  )),
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -359,7 +504,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   Widget _buildUnderlineInput(
     TextEditingController controller,
     String hint, {
-    IconData? suffixIcon,
+    Widget? suffixIcon,
     TextAlign textAlign = TextAlign.left,
   }) {
     return TextField(
@@ -379,16 +524,14 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
         ),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(vertical: 6),
-        suffixIcon: suffixIcon != null
-            ? Icon(suffixIcon, size: 18, color: const Color(0xFF999999))
-            : null,
+        suffixIcon: suffixIcon,
         suffixIconConstraints:
             const BoxConstraints(minWidth: 24, minHeight: 24),
         enabledBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: Color(0xFFD9D9D9)),
         ),
         focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Color(0xFF78A2D2)),
+          borderSide: BorderSide(color: Color(0xFF4F8FDB)),
         ),
       ),
     );
@@ -454,7 +597,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF78A2D2)),
+                          side: const BorderSide(color: Color(0xFF4F8FDB)),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(12)),
                           ),
@@ -465,7 +608,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                           ),
                         ),
                       ),
@@ -478,7 +621,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                           widget.onSave?.call();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF78A2D2),
+                          backgroundColor: const Color(0xFF4F8FDB),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(12)),
                           ),

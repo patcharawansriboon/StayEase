@@ -9,20 +9,10 @@ class PrivacyPolicyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -37,7 +27,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF78A2D2).withValues(alpha: 0.2),
+                        color: const Color(0xFF4F8FDB).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -90,13 +80,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // Policy items card
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+Container(
+                       width: double.infinity,
+                       padding: const EdgeInsets.all(20),
+                       decoration: BoxDecoration(
+                         color: Colors.white,
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(
+                           color: const Color(0xFFD9D9D9),
+                           width: 1,
+                         ),
+                       ),
                       child: Column(
                         children: [
                           _buildPolicyItem(
@@ -147,7 +141,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             color: const Color(0xFFEEF4FB),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 18, color: const Color(0xFF78A2D2)),
+          child: Icon(icon, size: 18, color: const Color(0xFF4F8FDB)),
         ),
         const SizedBox(width: 12),
         Expanded(

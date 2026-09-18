@@ -5,6 +5,9 @@ class AnnounceDetailsScreen extends StatelessWidget {
   final String? imagePath;
   final String title;
   final String detail;
+  final bool isAdmin;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const AnnounceDetailsScreen({
     super.key,
@@ -13,25 +16,18 @@ class AnnounceDetailsScreen extends StatelessWidget {
     this.title = 'แจ้งงดใช้น้ำชั่วคราว',
     this.detail =
         'เนื่องจากมีการซ่อมแซมระบบประปา จึงขอแจ้งงดใช้น้ำอาคาร A\nวันที่ 12 สิงหาคม 2569 ในช่วงเวลา 09:00 - 14:00 น.\n\nขออภัยในความไม่สะดวก',
+    this.isAdmin = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -123,6 +119,71 @@ class AnnounceDetailsScreen extends StatelessWidget {
                 ),
               ),
             ),
+            // Admin-only: แก้ไข + ลบโพสต์ (ติดขอบล่างจอ)
+            if (isAdmin)
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Row(
+                    children: [
+                      // ปุ่มแก้ไข (outlined สีฟ้า)
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: onEdit,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                color: Color(0xFF4F8FDB),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'แก้ไข',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF4F8FDB),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // ปุ่มลบโพสต์ (solid สีแดง)
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: onDelete,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE05C5C),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'ลบโพสต์',
+                              style: TextStyle(
+                                fontFamily: 'Prompt',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -62,20 +62,10 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -342,7 +332,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF78A2D2)),
+              borderSide: const BorderSide(color: Color(0xFF4F8FDB)),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
@@ -355,7 +345,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF78A2D2),
+              backgroundColor: const Color(0xFF4F8FDB),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
@@ -474,7 +464,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                     style: TextStyle(
                       fontFamily: 'Prompt',
                       fontSize: 14,
-                      color: Color(0xFF78A2D2),
+                      color: Color(0xFF4F8FDB),
                     ),
                   ),
                 ],
@@ -493,7 +483,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         fontFamily: 'Prompt',
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF78A2D2),
+        color: Color(0xFF4F8FDB),
       ),
     );
   }
@@ -516,7 +506,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                     child: OutlinedButton(
                       onPressed: _onBack,
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF78A2D2)),
+                        side: const BorderSide(color: Color(0xFF4F8FDB)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -526,7 +516,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                         style: TextStyle(
                           fontFamily: 'Prompt',
                           fontSize: 16,
-                          color: Color(0xFF78A2D2),
+                          color: Color(0xFF4F8FDB),
                         ),
                       ),
                     ),
@@ -551,7 +541,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
     return ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF78A2D2),
+        backgroundColor: const Color(0xFF4F8FDB),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -618,7 +608,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
                           ),
                         ),

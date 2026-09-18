@@ -8,6 +8,7 @@ class BillHistoryScreen extends StatefulWidget {
   final VoidCallback? onNavigateToChat;
   final VoidCallback? onNavigateToAnnounce;
   final VoidCallback? onNavigateToProfile;
+  final List<Map<String, dynamic>> billHistory;
 
   const BillHistoryScreen({
     super.key,
@@ -17,6 +18,7 @@ class BillHistoryScreen extends StatefulWidget {
     this.onNavigateToChat,
     this.onNavigateToAnnounce,
     this.onNavigateToProfile,
+    this.billHistory = const [],
   });
 
   @override
@@ -29,20 +31,10 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -79,13 +71,43 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
     );
   }
 
-  // ---- Bill Card ----
   Widget _buildBillCard() {
+    final history = widget.billHistory.isNotEmpty
+        ? widget.billHistory
+        : [
+            {'month': 'กรกฎาคม 2569', 'rent': 4500, 'electricity': 320, 'water': 270, 'penalty': 0, 'total': 5090, 'due_date': '5 สิงหาคม 2569', 'status': 'paid'},
+          ];
+    final bill = history.first;
+    final rent      = bill['rent']        ?? 0;
+    final elec      = bill['electricity'] ?? 0;
+    final water     = bill['water']       ?? 0;
+    final penalty   = bill['penalty']     ?? 0;
+    final total     = bill['total']       ?? 0;
+    final month     = bill['month']       ?? '';
+    final dueDate   = bill['due_date']    ?? '';
+
+    return Column(
+      children: [
+        for (int idx = 0; idx < history.length; idx++) ...[
+          if (idx > 0) const SizedBox(height: 16),
+          _buildSingleBillCard(history[idx]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSingleBillCard(Map<String, dynamic> bill) {
+    final rent    = bill['rent']        ?? 0;
+    final elec    = bill['electricity'] ?? 0;
+    final water   = bill['water']       ?? 0;
+    final penalty = bill['penalty']     ?? 0;
+    final total   = bill['total']       ?? 0;
+    final month   = bill['month']       ?? '';
+    final dueDate = bill['due_date']    ?? '';
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF78A2D2),
+        color: const Color(0xFF4F8FDB),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -98,26 +120,13 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
       child: Column(
         children: [
           Column(
-            children: const [
-              Text(
+            children: [
+              const Text(
                 'บิลประจำเดือน',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFFEFFAF),
-                ),
+                style: TextStyle(fontFamily: 'Prompt', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFFFEFFAF)),
               ),
-              SizedBox(height: 4),
-              Text(
-                'กรกฎาคม 2569',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.white,
-                ),
-              ),
+              const SizedBox(height: 4),
+              Text(month, style: const TextStyle(fontFamily: 'Prompt', fontSize: 12, color: Colors.white)),
             ],
           ),
           const SizedBox(height: 16),
@@ -131,49 +140,28 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
             ),
             child: Column(
               children: [
-                _buildBillRow('ค่าเช่าห้อง', '4,500.00'),
+                _buildBillRow('ค่าเช่าห้อง', '$rent.00'),
                 const SizedBox(height: 12),
-                _buildBillRow('ค่าไฟ', '320.00'),
+                _buildBillRow('ค่าไฟ', '$elec.00'),
                 const SizedBox(height: 12),
-                _buildBillRow('ค่าน้ำ', '270.00'),
+                _buildBillRow('ค่าน้ำ', '$water.00'),
                 const SizedBox(height: 12),
-                _buildBillRow('ค่าปรับ / อื่นๆ', '00.00'),
+                _buildBillRow('ค่าปรับ / อื่นๆ', penalty > 0 ? '$penalty.00' : '00.00'),
                 const SizedBox(height: 12),
                 const Divider(height: 1, color: Color(0xFFD9D9D9)),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
-                      'รวทั้งหมด',
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF000000),
-                      ),
-                    ),
+                  children: [
+                    const Text('รวมทั้งหมด',
+                        style: TextStyle(fontFamily: 'Prompt', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
                     Row(
                       children: [
-                        Text(
-                          '5,090.00',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF000000),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'บาท',
-                          style: TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF000000),
-                          ),
-                        ),
+                        Text('$total.00',
+                            style: const TextStyle(fontFamily: 'Prompt', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
+                        const SizedBox(width: 8),
+                        const Text('บาท',
+                            style: TextStyle(fontFamily: 'Prompt', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
                       ],
                     ),
                   ],
@@ -181,7 +169,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
                 const SizedBox(height: 12),
                 Container(height: 0.5, color: const Color(0xFFD9D9D9)),
                 const SizedBox(height: 12),
-                _buildInfoRow('ครบกำหนด', '5 สิงหาคม 2569'),
+                _buildInfoRow('ครบกำหนด', dueDate.isNotEmpty ? dueDate : '5 สิงหาคม 2569'),
                 const SizedBox(height: 8),
                 _buildInfoRow('ช่องทางการชำระ', 'QR Code (PromptPay)'),
                 const SizedBox(height: 8),
@@ -195,12 +183,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   }
 
   Widget _buildBillRow(String label, String amount) {
-    const style = TextStyle(
-      fontFamily: 'Prompt',
-      fontSize: 12,
-      fontWeight: FontWeight.w400,
-      color: Color(0xFF000000),
-    );
+    const style = TextStyle(fontFamily: 'Prompt', fontSize: 12, fontWeight: FontWeight.w400, color: Color(0xFF000000));
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -239,7 +222,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
         width: 280,
         height: 52,
         decoration: BoxDecoration(
-          color: const Color(0xFF78A2D2),
+          color: const Color(0xFF4F8FDB),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -289,7 +272,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
 
     return List.generate(5, (i) {
       final isActive = i == _selectedIndex;
-      final color = isActive ? const Color(0xFF78A2D2) : Colors.white;
+      final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
       return GestureDetector(
         onTap: () {
           if (i == 0 && widget.onNavigateToHome != null) {

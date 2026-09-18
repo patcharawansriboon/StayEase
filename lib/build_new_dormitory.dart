@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 class BuildNewDormitoryScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onCancel;
-  final VoidCallback? onSubmit;
+  final void Function(Map<String, dynamic> dormitoryData)? onSubmit;
 
   const BuildNewDormitoryScreen({
     super.key,
@@ -47,7 +47,17 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
     if (_currentStep < 3) {
       setState(() => _currentStep++);
     } else {
-      widget.onSubmit?.call();
+      final data = {
+        'name': _nameController.text,
+        'address': _addressController.text,
+        'phone': _phoneController.text,
+        'floorCount': int.tryParse(_floorCountController.text) ?? 1,
+        'totalRooms': int.tryParse(_totalRoomsController.text) ?? 0,
+        'roomNumberFormat': _roomNumberFormatController.text,
+        'maxTenants': _maxTenants ?? 1,
+        'roomArrangement': _roomArrangement ?? 'empty',
+      };
+      widget.onSubmit?.call(data);
     }
   }
 

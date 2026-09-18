@@ -18,20 +18,10 @@ class DeletionFailedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -97,7 +87,7 @@ class DeletionFailedScreen extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onContactAdmin,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF78A2D2),
+                    backgroundColor: const Color(0xFF4F8FDB),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -123,7 +113,7 @@ class DeletionFailedScreen extends StatelessWidget {
                   onPressed: onBackToSettings ?? onBack,
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF78A2D2)),
+                    side: const BorderSide(color: Color(0xFF4F8FDB)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -133,7 +123,7 @@ class DeletionFailedScreen extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: 'Prompt',
                       fontSize: 16,
-                      color: Color(0xFF78A2D2),
+                      color: Color(0xFF4F8FDB),
                     ),
                   ),
                 ),

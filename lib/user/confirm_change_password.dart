@@ -51,20 +51,10 @@ class _ConfirmChangePasswordScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -123,14 +113,18 @@ class _ConfirmChangePasswordScreenState
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: TextField(
-                                controller: _newPasswordController,
-                                obscureText: _obscureNew,
+Container(
+                               decoration: BoxDecoration(
+                                 color: Colors.white,
+                                 borderRadius: BorderRadius.circular(16),
+                                 border: Border.all(
+                                   color: const Color(0xFFD9D9D9),
+                                   width: 1,
+                                 ),
+                               ),
+                               child: TextField(
+                                 controller: _newPasswordController,
+                                 obscureText: _obscureNew,
                                 style: const TextStyle(
                                   fontFamily: 'Prompt',
                                   fontSize: 14,
@@ -231,14 +225,18 @@ class _ConfirmChangePasswordScreenState
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: TextField(
-                                controller: _confirmPasswordController,
-                                obscureText: _obscureConfirm,
+Container(
+                               decoration: BoxDecoration(
+                                 color: Colors.white,
+                                 borderRadius: BorderRadius.circular(16),
+                                 border: Border.all(
+                                   color: const Color(0xFFD9D9D9),
+                                   width: 1,
+                                 ),
+                               ),
+                               child: TextField(
+                                 controller: _confirmPasswordController,
+                                 obscureText: _obscureConfirm,
                                 onChanged: (_) => setState(() {}),
                                 style: const TextStyle(
                                   fontFamily: 'Prompt',
@@ -315,9 +313,9 @@ class _ConfirmChangePasswordScreenState
                 child: ElevatedButton(
                   onPressed: _canSave ? widget.onSave : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF78A2D2),
+                    backgroundColor: const Color(0xFF4F8FDB),
                     disabledBackgroundColor:
-                        const Color(0xFF78A2D2).withValues(alpha: 0.4),
+                        const Color(0xFF4F8FDB).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),

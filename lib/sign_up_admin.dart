@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'services/auth_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 
 class SignUpAdminScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onNavigateToSignIn;
-  final VoidCallback? onSignUp;
+  final void Function(String name, String phone)? onSignUp;
 
   const SignUpAdminScreen({
     super.key,
@@ -189,7 +190,19 @@ class _SignUpAdminScreenState extends State<SignUpAdminScreen> {
                         width: double.infinity,
                         height: 52,
                         child: TextButton(
-                          onPressed: widget.onSignUp,
+                          onPressed: () async {
+                            final success = await AuthService().signUpAdmin(
+                              phone: _phoneController.text,
+                              password: _passwordController.text,
+                              fullName: _nameController.text,
+                            );
+                            if (success) {
+                              widget.onSignUp?.call(
+                                _nameController.text,
+                                _phoneController.text,
+                              );
+                            }
+                          },
                           style: TextButton.styleFrom(
                             backgroundColor: const Color(0xFF5B93D4),
                             shape: RoundedRectangleBorder(
@@ -290,19 +303,19 @@ class _SignUpAdminScreenState extends State<SignUpAdminScreen> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: borderColor, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: borderColor, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
             color: hasError == true
                 ? const Color(0xFFFF0303)
-                : const Color(0xFF78A2D2),
+                : const Color(0xFF4F8FDB),
             width: 1.5,
           ),
         ),

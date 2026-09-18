@@ -43,26 +43,16 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: GestureDetector(
+return Scaffold(
+      backgroundColor: Colors.white,
+      body:GestureDetector(
         onTap: _showDropdown ? _closeDropdown : null,
         behavior: HitTestBehavior.translucent,
         child: Stack(
           children: [
             Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -218,7 +208,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              color: const Color(0xFF78A2D2),
+              color: const Color(0xFF4F8FDB),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -366,7 +356,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         width: 280,
         height: 52,
         decoration: BoxDecoration(
-          color: const Color(0xFF78A2D2),
+          color: const Color(0xFF4F8FDB),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -416,7 +406,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
     return List.generate(5, (i) {
       final isActive = i == _selectedIndex;
-      final color = isActive ? const Color(0xFF78A2D2) : Colors.white;
+      final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
       return GestureDetector(
         onTap: () {
           if (i == 0 && widget.onNavigateToHome != null) {

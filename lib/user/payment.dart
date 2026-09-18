@@ -8,20 +8,10 @@ class PaymentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -69,7 +59,7 @@ class PaymentScreen extends StatelessWidget {
                             errorBuilder: (_, __, ___) => const Icon(
                               Icons.qr_code_2,
                               size: 120,
-                              color: Color(0xFF78A2D2),
+                              color: Color(0xFF4F8FDB),
                             ),
                           ),
                         ),
@@ -82,7 +72,7 @@ class PaymentScreen extends StatelessWidget {
                       width: 79,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF78A2D2).withValues(alpha: 0.15),
+                        color: const Color(0xFF4F8FDB).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -91,7 +81,7 @@ class PaymentScreen extends StatelessWidget {
                           Icon(
                             Icons.download,
                             size: 20,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                           ),
                           SizedBox(width: 8),
                           Text(
@@ -99,7 +89,7 @@ class PaymentScreen extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: 'Prompt',
                               fontSize: 12,
-                              color: Color(0xFF78A2D2),
+                              color: Color(0xFF4F8FDB),
                             ),
                           ),
                         ],
@@ -122,7 +112,7 @@ class PaymentScreen extends StatelessWidget {
                           Icon(
                             Icons.image_outlined,
                             size: 22,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                           ),
                           SizedBox(width: 4),
                           Text(
@@ -130,7 +120,7 @@ class PaymentScreen extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: 'Prompt',
                               fontSize: 12,
-                              color: Color(0xFF78A2D2),
+                              color: Color(0xFF4F8FDB),
                             ),
                           ),
                         ],
@@ -151,7 +141,7 @@ class PaymentScreen extends StatelessWidget {
                   width: 130,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF78A2D2),
+                    color: const Color(0xFF4F8FDB),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Center(

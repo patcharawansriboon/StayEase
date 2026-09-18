@@ -32,14 +32,14 @@ class AlreadyApprovedScreen extends StatelessWidget {
           child: Container(
             width: double.infinity,
             decoration: const BoxDecoration(
-              color: Color(0xFF78A2D2),
+              color: Color(0xFFBCDEFB),
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(32),
                 topRight: Radius.circular(32),
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 40, 32, 48),
+              padding: const EdgeInsets.fromLTRB(16, 40, 16, 48),
               child: Column(
                 children: [
                   const Text(
@@ -63,22 +63,23 @@ class AlreadyApprovedScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
-                    width: 214,
+                    width: double.infinity,
                     height: 52,
                     child: TextButton(
                       onPressed: onPressed,
                       style: TextButton.styleFrom(
-                        backgroundColor: Colors.white,
+                        backgroundColor: const Color(0xFF5B93D4),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                       child: const Text(
                         'เข้าสู่แอป',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontFamily: 'Prompt',
+                          fontSize: 15,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF78A2D2),
+                          color: Colors.white,
                         ),
                       ),
                     ),

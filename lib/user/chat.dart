@@ -134,7 +134,7 @@ class _ChatScreenState extends State<ChatScreen> {
               color: const Color(0xFFEEF4FB),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.apartment, size: 20, color: Color(0xFF78A2D2)),
+            child: const Icon(Icons.apartment, size: 20, color: Color(0xFF4F8FDB)),
           ),
           const SizedBox(width: 10),
           const Text(
@@ -183,7 +183,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 color: const Color(0xFFEEF4FB),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.apartment, size: 16, color: Color(0xFF78A2D2)),
+              child: const Icon(Icons.apartment, size: 16, color: Color(0xFF4F8FDB)),
             ),
             const SizedBox(width: 8),
             Flexible(
@@ -214,7 +214,7 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF78A2D2),
+              color: const Color(0xFF4F8FDB),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
@@ -389,7 +389,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           GestureDetector(
             onTap: _pickImage,
-            child: const Icon(Icons.image_outlined, size: 24, color: Color(0xFF78A2D2)),
+            child: const Icon(Icons.image_outlined, size: 24, color: Color(0xFF4F8FDB)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -419,12 +419,12 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 12),
           GestureDetector(
             onTap: _sendMessage,
-            child: const Icon(Icons.send, size: 22, color: Color(0xFF78A2D2)),
+            child: const Icon(Icons.send, size: 22, color: Color(0xFF4F8FDB)),
           ),
           const SizedBox(width: 12),
           GestureDetector(
             onTap: _takePhoto,
-            child: const Icon(Icons.camera_alt_outlined, size: 24, color: Color(0xFF78A2D2)),
+            child: const Icon(Icons.camera_alt_outlined, size: 24, color: Color(0xFF4F8FDB)),
           ),
         ],
       ),

@@ -9,20 +9,10 @@ class TermsOfUseScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -81,13 +71,17 @@ class TermsOfUseScreen extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // Terms list card
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+Container(
+                       width: double.infinity,
+                       padding: const EdgeInsets.all(20),
+                       decoration: BoxDecoration(
+                         color: Colors.white,
+                         borderRadius: BorderRadius.circular(16),
+                         border: Border.all(
+                           color: const Color(0xFFD9D9D9),
+                           width: 1,
+                         ),
+                       ),
                       child: Column(
                         children: [
                           _buildTermItem(
@@ -149,7 +143,7 @@ class TermsOfUseScreen extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: const BoxDecoration(
-            color: Color(0xFF78A2D2),
+            color: Color(0xFF4F8FDB),
             shape: BoxShape.circle,
           ),
           child: Center(

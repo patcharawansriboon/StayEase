@@ -90,7 +90,7 @@ class _EditeRentalInformationScreenState
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF78A2D2)),
+              borderSide: const BorderSide(color: Color(0xFF4F8FDB)),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -106,7 +106,7 @@ class _EditeRentalInformationScreenState
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF78A2D2),
+              backgroundColor: const Color(0xFF4F8FDB),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
               elevation: 0,
@@ -213,7 +213,7 @@ class _EditeRentalInformationScreenState
                   style: TextStyle(
                     fontFamily: 'Prompt',
                     fontSize: 14,
-                    color: Color(0xFF78A2D2),
+                    color: Color(0xFF4F8FDB),
                   ),
                 ),
               ],
@@ -281,7 +281,7 @@ class _EditeRentalInformationScreenState
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -403,7 +403,7 @@ class _EditeRentalInformationScreenState
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -502,20 +502,10 @@ class _EditeRentalInformationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.35, 0.6, 1.0],
-            colors: [
-              Color(0xFFEAF2FB),
-              Color(0xFFBFD9F2),
-              Color(0xFFCFE0F0),
-              Color(0xFFFFFFFF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: Column(
           children: [
@@ -535,7 +525,7 @@ class _EditeRentalInformationScreenState
                             shape: BoxShape.circle,
                             color: Colors.white,
                             border: Border.all(
-                                color: const Color(0xFF78A2D2), width: 2),
+                                color: const Color(0xFF4F8FDB), width: 2),
                           ),
                           child: ClipOval(
                             child: _profileImage != null
@@ -543,7 +533,7 @@ class _EditeRentalInformationScreenState
                                 : const Icon(
                                     Icons.person_outline,
                                     size: 32,
-                                    color: Color(0xFF78A2D2),
+                                    color: Color(0xFF4F8FDB),
                                   ),
                           ),
                         ),
@@ -556,7 +546,7 @@ class _EditeRentalInformationScreenState
                               width: 20,
                               height: 20,
                               decoration: const BoxDecoration(
-                                color: Color(0xFF78A2D2),
+                                color: Color(0xFF4F8FDB),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.camera_alt,
@@ -703,7 +693,7 @@ class _EditeRentalInformationScreenState
                 child: ElevatedButton(
                   onPressed: _showSaveDialog,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF78A2D2),
+                    backgroundColor: const Color(0xFF4F8FDB),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -758,7 +748,7 @@ class _EditeRentalInformationScreenState
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF78A2D2)),
+                          side: const BorderSide(color: Color(0xFF4F8FDB)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -769,7 +759,7 @@ class _EditeRentalInformationScreenState
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                           ),
                         ),
                       ),
@@ -782,7 +772,7 @@ class _EditeRentalInformationScreenState
                           widget.onBack?.call();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF78A2D2),
+                          backgroundColor: const Color(0xFF4F8FDB),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -841,7 +831,7 @@ class _EditeRentalInformationScreenState
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF78A2D2)),
+                          side: const BorderSide(color: Color(0xFF4F8FDB)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -852,7 +842,7 @@ class _EditeRentalInformationScreenState
                           style: TextStyle(
                             fontFamily: 'Prompt',
                             fontSize: 14,
-                            color: Color(0xFF78A2D2),
+                            color: Color(0xFF4F8FDB),
                           ),
                         ),
                       ),
@@ -878,7 +868,7 @@ class _EditeRentalInformationScreenState
                           });
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF78A2D2),
+                          backgroundColor: const Color(0xFF4F8FDB),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -942,13 +932,17 @@ class _EditeRentalInformationScreenState
     String? trailingSvg,
     required List<Widget> children,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+return Container(
+       width: double.infinity,
+       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+       decoration: BoxDecoration(
+         color: Colors.white,
+         borderRadius: BorderRadius.circular(16),
+         border: Border.all(
+           color: const Color(0xFFD9D9D9),
+           width: 1,
+         ),
+       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -957,7 +951,7 @@ class _EditeRentalInformationScreenState
               if (svgIcon != null)
                 SvgPicture.asset(svgIcon, width: 26, height: 26)
               else
-                Icon(icon, size: 18, color: const Color(0xFF78A2D2)),
+                Icon(icon, size: 18, color: const Color(0xFF4F8FDB)),
               const SizedBox(width: 6),
               Text(
                 title,
@@ -965,7 +959,7 @@ class _EditeRentalInformationScreenState
                   fontFamily: 'Prompt',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF78A2D2),
+                  color: Color(0xFF4F8FDB),
                 ),
               ),
               if (subtitle != null) ...[
@@ -983,7 +977,7 @@ class _EditeRentalInformationScreenState
               if (trailingSvg != null)
                 SvgPicture.asset(trailingSvg, width: 22, height: 22)
               else if (trailingIcon != null)
-                Icon(trailingIcon, size: 18, color: const Color(0xFF78A2D2)),
+                Icon(trailingIcon, size: 18, color: const Color(0xFF4F8FDB)),
             ],
           ),
           const SizedBox(height: 8),
@@ -1022,7 +1016,7 @@ class _EditeRentalInformationScreenState
     final borderColor =
         hasError ? const Color(0xFFFF0000) : const Color(0xFFE0E0E0);
     final focusColor =
-        hasError ? const Color(0xFFFF0000) : const Color(0xFF78A2D2);
+        hasError ? const Color(0xFFFF0000) : const Color(0xFF4F8FDB);
     return TextField(
       controller: controller,
       focusNode: focusNode,
