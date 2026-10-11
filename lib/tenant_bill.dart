@@ -8,6 +8,7 @@ class TenantBillScreen extends StatefulWidget {
   final VoidCallback? onNavigateToReportRepair;
   final VoidCallback? onNavigateToAnnouncement;
   final VoidCallback? onNavigateToProfile;
+  final VoidCallback? onCreateBill;
   final void Function(Map<String, dynamic> bill)? onTapBill;
   final List<Map<String, String>> tenants;
   final Map<String, dynamic> currentBill;
@@ -20,6 +21,7 @@ class TenantBillScreen extends StatefulWidget {
     this.onNavigateToReportRepair,
     this.onNavigateToAnnouncement,
     this.onNavigateToProfile,
+    this.onCreateBill,
     this.onTapBill,
     this.tenants = const [],
     this.currentBill = const {},
@@ -31,7 +33,6 @@ class TenantBillScreen extends StatefulWidget {
 
 class _TenantBillScreenState extends State<TenantBillScreen> {
   final TextEditingController _searchController = TextEditingController();
-  int _selectedIndex = 2;
   String _filter = 'all';
 
   @override
@@ -118,7 +119,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
           SizedBox(
             height: 32,
             child: ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: widget.onCreateBill,
               icon: const Icon(Icons.add, size: 14, color: Colors.white),
               label: const Text(
                 'สร้างบิล',
@@ -508,8 +509,9 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
     const width = 320.0;
     const count = 6;
     const size = 40.0;
+    const activeIndex = 2; // bill = index 2 เสมอ
     final slot = width / count;
-    final indicatorLeft = slot * _selectedIndex + (slot - size) / 2;
+    final indicatorLeft = slot * activeIndex + (slot - size) / 2;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -544,7 +546,8 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
           ),
           Row(
             children: List.generate(count, (index) {
-              final selected = index == _selectedIndex;
+              const activeIndex = 2;
+              final selected = index == activeIndex;
               final color = selected ? const Color(0xFF4F8FDB) : Colors.white;
               return GestureDetector(
                 onTap: () => _navigate(index),
@@ -585,7 +588,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   void _navigate(int index) {
-    setState(() => _selectedIndex = index);
+    // ไม่ setState _selectedIndex เพราะ indicator ต้อง fix ที่ index 2 (bill) เสมอ
     switch (index) {
       case 0:
         print('Bottom nav tapped: Home (index 0) → navigate to Dashboard');

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../services/mock_service.dart';
 
 class AnnounceScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHome;
@@ -9,6 +10,10 @@ class AnnounceScreen extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final List<Map<String, String>> announcements;
   final bool isAdmin;
+  final bool hasRoom;
+  final VoidCallback? onAddAnnouncement;
+  final VoidCallback? onNavigateToTenant;
+  final VoidCallback? onNavigateToReportRepair;
 
   const AnnounceScreen({
     super.key,
@@ -19,6 +24,10 @@ class AnnounceScreen extends StatefulWidget {
     this.onNavigateToProfile,
     this.announcements = const [],
     this.isAdmin = false,
+    this.hasRoom = true,
+    this.onAddAnnouncement,
+    this.onNavigateToTenant,
+    this.onNavigateToReportRepair,
   });
 
   @override
@@ -27,18 +36,54 @@ class AnnounceScreen extends StatefulWidget {
 
 class _AnnounceScreenState extends State<AnnounceScreen> {
   int _selectedIndex = 3;
+  final _mockService = MockService();
 
-  List<Map<String, String>> get _displayAnnouncements =>
-      widget.announcements.isNotEmpty
-          ? widget.announcements
-          : [
-              {'image': 'assets/images/announcement_1.png'},
-              {'image': 'assets/images/announcement_2.png'},
-            ];
-
-  String get _detailButtonText => 'รายละเอียด';
+  List<Map<String, String>> _announcements = [];
+  bool _loading = true;
 
   @override
+  void initState() {
+    super.initState();
+    _loadAnnouncements();
+  }
+
+  /// เรียกจากภายนอกเมื่อกลับมาที่หน้านี้
+  void reload() {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    _loadAnnouncements();
+  }
+
+  Future<void> _loadAnnouncements() async {
+    try {
+      // ดึงเฉพาะประกาศที่เผยแพร่ (ไม่มีระบบฉบับร่างแล้ว)
+      String? status = 'published';
+      String? dormId;
+      if (widget.isAdmin) {
+        dormId = await _mockService.getAdminDormitoryId();
+      }
+
+      final rows = await _mockService.getAnnouncements(
+        dormitoryId: dormId,
+        status: status,
+      );
+      if (!mounted) return;
+      setState(() {
+        _announcements = rows;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _announcements = [];
+        _loading = false;
+      });
+    }
+  }
+
+  List<Map<String, String>> get _displayAnnouncements => _announcements;
+
+  String get _detailButtonText => 'รายละเอียด';  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -50,15 +95,23 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  children: _displayAnnouncements.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildAnnouncementCard(item['image']!),
-                  )).toList(),
-                ),
-              ),
+              child: (!widget.isAdmin && !widget.hasRoom)
+                  ? _buildNoRoomEmptyState()
+                  : _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _displayAnnouncements.isEmpty
+                          ? _buildEmptyAnnouncements()
+                          : SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              child: Column(
+                                children: _displayAnnouncements
+                                    .map((item) => Padding(
+                                          padding: const EdgeInsets.only(bottom: 12),
+                                          child: _buildAnnouncementCard(item),
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
             ),
             _buildBottomNav(),
           ],
@@ -69,9 +122,55 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
 
   // ---- Header ----
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 60, 16, 12),
-      child: const Center(
+    if (widget.isAdmin) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 60, 16, 12),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'ประกาศ',
+                style: TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF000000),
+                ),
+              ),
+            ),
+            // ปุ่มเพิ่มประกาศ
+            GestureDetector(
+              onTap: widget.onAddAnnouncement,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F8FDB),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'เพิ่มประกาศ',
+                      style: TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 13,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 60, 16, 12),
+      child: Center(
         child: Text(
           'ประกาศ',
           style: TextStyle(
@@ -85,8 +184,102 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
     );
   }
 
+  // ---- Empty state เมื่อยังไม่ได้เข้าร่วมหอพัก ----
+  Widget _buildNoRoomEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEAF2FB),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.campaign_outlined,
+                  size: 48, color: Color(0xFF4F8FDB)),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'ยังไม่มีประกาศ',
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'คุณยังไม่ได้เข้าร่วมห้องพักใด\nจึงยังไม่มีประกาศจากหอพัก',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 14,
+                color: Colors.black.withValues(alpha: 0.45),
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- Empty state เมื่อไม่มีประกาศ ----
+  Widget _buildEmptyAnnouncements() {
+    final msg = widget.isAdmin ? 'ยังไม่มีประกาศที่เผยแพร่' : 'ยังไม่มีประกาศ';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEAF2FB),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.campaign_outlined,
+                  size: 48, color: Color(0xFF4F8FDB)),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              msg,
+              style: const TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _imageError() => Container(
+        width: double.infinity,
+        height: 160,
+        color: const Color(0xFFF5F5F5),
+        child: const Center(
+          child: Icon(Icons.image_outlined, size: 48, color: Color(0xFFCCCCCC)),
+        ),
+      );
+
   // ---- Announcement Card ----
-  Widget _buildAnnouncementCard(String imagePath) {
+  Widget _buildAnnouncementCard(Map<String, String> item) {
+    final imagePath = item['image'] ?? '';
+    final title     = item['title'] ?? '';
+    final content   = item['content'] ?? '';
+    final date      = item['date'] ?? '';
+
     return GestureDetector(
       onTap: () => widget.onNavigateToDetails?.call(imagePath),
       child: Container(
@@ -104,45 +297,68 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Announcement image
-              Image.asset(
-                imagePath,
-                width: double.infinity,
-                height: 160,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 160,
-                  color: const Color(0xFFF5F5F5),
-                  child: const Center(
-                    child: Icon(Icons.image_outlined,
-                        size: 48, color: Color(0xFFCCCCCC)),
-                  ),
-                ),
-              ),
-              // Detail/Edit button
-              Positioned(
-                bottom: 8,
-                right: 8,
-                child: GestureDetector(
-                  onTap: () => widget.onNavigateToDetails?.call(imagePath),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4F8FDB).withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _detailButtonText,
-                      style: const TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 11,
-                        color: Colors.white,
+              // รูปภาพ (ถ้ามี)
+              if (imagePath.isNotEmpty)
+                imagePath.startsWith('http')
+                    ? Image.network(
+                        imagePath,
+                        width: double.infinity,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      )
+                    : Image.asset(
+                        imagePath,
+                        width: double.infinity,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                       ),
-                    ),
-                  ),
+              // title + content + วันที่
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (title.isNotEmpty)
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: 'Prompt',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A2E),
+                        ),
+                      ),
+                    if (content.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        content,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Prompt',
+                          fontSize: 13,
+                          color: Color(0xFF666666),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                    if (date.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        date,
+                        style: const TextStyle(
+                          fontFamily: 'Prompt',
+                          fontSize: 11,
+                          color: Color(0xFFAAAAAA),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -338,11 +554,16 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
         onTap: () {
           if (i == 0 && widget.onNavigateToHome != null) {
             widget.onNavigateToHome!();
+          } else if (i == 1 && widget.onNavigateToTenant != null) {
+            widget.onNavigateToTenant!();
           } else if (i == 2 && widget.onNavigateToRentalFee != null) {
             widget.onNavigateToRentalFee!();
+          } else if (i == 3 && widget.onNavigateToReportRepair != null) {
+            widget.onNavigateToReportRepair!();
           } else if (i == 5 && widget.onNavigateToProfile != null) {
             widget.onNavigateToProfile!();
           }
+          // i == 4 คือหน้าปัจจุบัน (announce) ไม่ต้อง navigate
         },
         child: SizedBox(
           width: slot,

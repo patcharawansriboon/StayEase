@@ -9,15 +9,35 @@ class MockService {
   final _db = Supabase.instance.client;
 
   // ── user ที่ login อยู่ ────────────────────────────────────
+
+  /// ตรวจว่า user ที่ login อยู่เป็น Roommate ไหม
+  /// (member_type = 'roommate' ใน dormitory_members)
+  Future<bool> isCurrentUserRoommate() async {
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) return false;
+      final row = await _db
+          .from('dormitory_members')
+          .select('member_type')
+          .eq('user_id', uid)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return row?['member_type']?.toString() == 'roommate';
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<Map<String, String>> getCurrentUser() async {
     try {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return _fallbackUser();
 
       for (final entry in [
-        {'table': 'admins',    'role': 'admin'},
-        {'table': 'tenants',   'role': 'tenant'},
-        {'table': 'roommates', 'role': 'roommate'},
+        {'table': 'admins',           'role': 'admin'},
+        {'table': 'tenants',          'role': 'tenant'},
+        {'table': 'roommate_invites', 'role': 'roommate'},
       ]) {
         final row = await _db
             .from(entry['table']!)
@@ -50,13 +70,31 @@ class MockService {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return _fallbackRoom();
 
-      final row = await _db
-          .from('rooms')
-          .select('room_number, floor, building, status')
-          .eq('tenant_id', uid)
+      // 1. ดึงจาก dormitory_members ที่ approved แล้ว (ห้องที่ admin ยืนยัน)
+      final approvedRow = await _db
+          .from('dormitory_members')
+          .select('room_id, rooms(room_number, floor, building, status)')
+          .eq('user_id', uid)
+          .eq('status', 'approved')
           .maybeSingle();
 
-      if (row != null) return Map<String, dynamic>.from(row);
+      final approvedRoom = approvedRow?['rooms'] as Map<String, dynamic>?;
+      if (approvedRoom != null && (approvedRoom['room_number'] ?? '').toString().isNotEmpty) {
+        return Map<String, dynamic>.from(approvedRoom);
+      }
+
+      // 2. fallback: ดึงจาก dormitory_members ที่ pending (ห้องที่เลือกตอน sign up)
+      final pendingRow = await _db
+          .from('dormitory_members')
+          .select('room_id, rooms(room_number, floor, building, status)')
+          .eq('user_id', uid)
+          .maybeSingle();
+
+      final pendingRoom = pendingRow?['rooms'] as Map<String, dynamic>?;
+      if (pendingRoom != null && (pendingRoom['room_number'] ?? '').toString().isNotEmpty) {
+        return Map<String, dynamic>.from(pendingRoom);
+      }
+
       return _fallbackRoom();
     } catch (_) {
       return _fallbackRoom();
@@ -64,10 +102,10 @@ class MockService {
   }
 
   Map<String, dynamic> _fallbackRoom() => {
-        'room_number': 'A101',
-        'floor':       1,
-        'building':    'A',
-        'status':      'occupied',
+        'room_number': '',
+        'floor':       '',
+        'building':    '',
+        'status':      '',
       };
 
   // ── บิลปัจจุบัน (pending ล่าสุด) ─────────────────────────
@@ -159,6 +197,23 @@ class MockService {
       ];
 
   // ── สถิติ dashboard (admin) ──────────────────────────────
+  /// ดึง dormitory id ของ admin ที่ login อยู่
+  Future<String?> getAdminDormitoryId() async {
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) return null;
+      final row = await _db
+          .from('dormitories')
+          .select('id')
+          .eq('created_by', uid)
+          .maybeSingle();
+      return row?['id']?.toString();
+    } catch (e) {
+      print('❌ getAdminDormitoryId error: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, int>> getDashboardStats({String? dormitoryId}) async {
     try {
       dynamic tenantsQuery = _db.from('tenants').select('id');
@@ -190,7 +245,8 @@ class MockService {
         'vacant_rooms':    vacantRooms,
         'repair_requests': repairCount,
       };
-    } catch (_) {
+    } catch (e) {
+      print('❌ getDashboardStats error: $e');
       return {'total_tenants': 0, 'total_rooms': 0, 'vacant_rooms': 0, 'repair_requests': 0};
     }
   }
@@ -301,32 +357,40 @@ class MockService {
       ];
 
   // ── ประกาศ ───────────────────────────────────────────────
-  Future<List<Map<String, String>>> getAnnouncements({String? dormitoryId}) async {
+  /// [status] = 'published' | 'draft' | null (ทั้งหมด)
+  Future<List<Map<String, String>>> getAnnouncements({
+    String? dormitoryId,
+    String? status,
+  }) async {
     try {
       dynamic query = _db
           .from('announcements')
-          .select('id, title, content, image_url, created_at');
+          .select('id, title, content, image_url, created_at, status');
 
       if (dormitoryId != null) {
         query = query.eq('dormitory_id', dormitoryId);
       }
+      if (status != null) {
+        query = query.eq('status', status);
+      }
 
       query = query
           .order('created_at', ascending: false)
-          .limit(10);
+          .limit(50);
 
       final rows = await query;
 
-      if ((rows as List).isEmpty) return _fallbackAnnouncements();
-      return rows.map<Map<String, String>>((r) => {
-        'id':      r['id'] ?? '',
-        'title':   r['title'] ?? '',
-        'content': r['content'] ?? '',
-        'image':   r['image_url'] ?? 'assets/images/announcement_1.png',
-        'date':    _formatDate(r['created_at']),
+      return (rows as List).map<Map<String, String>>((r) => {
+        'id':      r['id']?.toString() ?? '',
+        'title':   r['title']?.toString() ?? '',
+        'content': r['content']?.toString() ?? '',
+        'image':   r['image_url']?.toString() ?? '',
+        'status':  r['status']?.toString() ?? 'published',
+        'date':    _formatDate(r['created_at']?.toString()),
       }).toList();
-    } catch (_) {
-      return _fallbackAnnouncements();
+    } catch (e) {
+      print('❌ getAnnouncements error: $e');
+      return [];
     }
   }
 

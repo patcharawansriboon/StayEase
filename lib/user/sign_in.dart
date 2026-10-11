@@ -36,7 +36,6 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ---- ปุ่มย้อนกลับ ----
         Align(
           alignment: Alignment.centerLeft,
           child: Padding(
@@ -53,7 +52,6 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         ),
 
-        // ---- Illustration ----
         SizedBox(
           width: 245,
           height: 245,
@@ -65,7 +63,6 @@ class _SignInScreenState extends State<SignInScreen> {
 
         const Spacer(),
 
-        // ---- กรอบสีฟ้าทึบ: Form ----
         SizedBox(
           height: 496,
           child: Container(
@@ -82,7 +79,6 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Welcome Back
                   Text(
                     'Welcome Back',
                     style: TextStyle(
@@ -92,7 +88,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 34),
 
-                  // เบอร์โทรศัพท์
                   _buildLabel('เบอร์โทรศัพท์'),
                   const SizedBox(height: 8),
                   _buildTextField(
@@ -106,7 +101,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  // รหัสผ่าน
                   _buildLabel('รหัสผ่าน'),
                   const SizedBox(height: 8),
                   _buildTextField(
@@ -125,9 +119,8 @@ class _SignInScreenState extends State<SignInScreen> {
                           () => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  const SizedBox(height: 70),
+                  const SizedBox(height: 12),
 
-                  // ปุ่มเข้าสู่ระบบ
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -186,7 +179,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ลืมรหัสผ่าน?
                   Center(
                     child: TextButton(
                       onPressed: () {},
@@ -250,8 +242,8 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide:
-              const BorderSide(color: Color(0xFFBCDEFB), width: 1.5),
+          borderSide: const BorderSide(
+              color: Color(0xFFBCDEFB), width: 1.5),
         ),
       ),
     );

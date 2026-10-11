@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ApplicationProcessScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -43,10 +44,174 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
     super.dispose();
   }
 
-  void _onNext() {
+  Future<void> _onNext() async {
     if (_currentStep < 3) {
       setState(() => _currentStep++);
     } else {
+      // insert request ใน dormitory_members
+      try {
+        final uid = Supabase.instance.client.auth.currentUser?.id;
+        print('🔍 _onNext: uid=$uid');
+        if (uid != null) {
+          // ตรวจสอบว่าเป็น roommate อยู่แล้วหรือไม่ (เพื่อกำหนด member_type)
+          final existingRoommate = await Supabase.instance.client
+              .from('dormitory_members')
+              .select('id, member_type, status')
+              .eq('user_id', uid)
+              .eq('member_type', 'roommate')
+              .eq('status', 'approved')
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+
+          print('🔍 existingRoommate: $existingRoommate');
+          final isUpgrade = existingRoommate != null;
+
+          // ใช้ข้อมูลจากฟอร์ม (dorm_code, room_number) เพื่อหา dormitory_id และ room_id ใหม่
+          final dormCode = _dormCodeController.text.trim().toUpperCase();
+          final roomNumber = _roomController.text.trim().toUpperCase();
+
+          print('🔍 Form data: dormCode=$dormCode, roomNumber=$roomNumber');
+
+          if (dormCode.isEmpty || roomNumber.isEmpty) {
+            print('❌ dorm code or room number is empty');
+            return;
+          }
+
+          final dormRow = await Supabase.instance.client
+              .from('dormitories')
+              .select('id')
+              .eq('dorm_code', dormCode)
+              .maybeSingle();
+
+          print('🔍 dormRow: $dormRow');
+
+          if (dormRow == null) {
+            print('❌ dormitory not found for code: $dormCode');
+            return;
+          }
+          final dormitoryId = dormRow['id'] as String;
+
+          final resolved = await Supabase.instance.client.rpc(
+            'resolve_room_id',
+            params: {
+              'p_dormitory_id': dormitoryId,
+              'p_room_number': roomNumber,
+            },
+          );
+          print('🔍 resolve_room_id: $resolved');
+
+          final resolvedRows = resolved is List ? resolved : <dynamic>[];
+          final roomId = resolvedRows.isNotEmpty
+              ? resolvedRows.first['room_id']?.toString() ?? ''
+              : '';
+
+          if (roomId.isEmpty) {
+            // Debug: list all rooms in this dormitory
+            final allRooms = await Supabase.instance.client
+                .from('rooms')
+                .select('room_number, dormitory_id')
+                .eq('dormitory_id', dormitoryId);
+            print('🔍 All rooms in dormitory $dormitoryId: $allRooms');
+            
+            // Also check all rooms with this room_number across all dormitories
+            final allMatching = await Supabase.instance.client
+                .from('rooms')
+                .select('room_number, dormitory_id')
+                .ilike('room_number', roomNumber);
+            print('🔍 All rooms with room_number=$roomNumber: $allMatching');
+            
+            print('❌ room not found: $roomNumber in dormitory $dormitoryId');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'ไม่พบห้อง $roomNumber ในหอพักนี้ กรุณาติดต่อแอดมินสร้างห้องก่อน',
+                    style: const TextStyle(fontFamily: 'Prompt'),
+                  ),
+                  backgroundColor: const Color(0xFFFF0303),
+                ),
+              );
+            }
+            return;
+          }
+
+          final memberType = isUpgrade ? 'upgrade' : 'tenant';
+          print('🔍 memberType: $memberType, dormitoryId=$dormitoryId, roomId=$roomId');
+
+          // อัปเดตชื่อ/เบอร์ให้ roommate_invites เพื่อให้ admin เห็นในรายละเอียดคำขอ
+          final existingInvite = await Supabase.instance.client
+              .from('roommate_invites')
+              .select('id')
+              .eq('id', uid)
+              .maybeSingle();
+
+          if (existingInvite != null) {
+            // มี record อยู่แล้ว (roommate เดิม) → update ชื่อ/เบอร์/สถานะ
+            await Supabase.instance.client.from('roommate_invites').update({
+              'full_name': widget.userName,
+              'phone':     widget.userPhone,
+              'status':    'pending',
+            }).eq('id', uid);
+          } else {
+            // ไม่มี record → insert พร้อม invite_code dummy (NOT NULL constraint)
+            await Supabase.instance.client.from('roommate_invites').insert({
+              'id':          uid,
+              'full_name':   widget.userName,
+              'phone':       widget.userPhone,
+              'invite_code': 'UPGRADE-$uid',
+              'status':      'pending',
+              'is_verified': false,
+            });
+          }
+          print('🔍 updated roommate_invites: ${widget.userName}');
+
+          // ตรวจ record เดิมของ user+dormitory นี้ (ทุก status)
+          // เพราะ dormitory_members มี unique(user_id, dormitory_id)
+          // ถ้ามี record เก่า (เช่น rejected) ต้อง update ไม่ใช่ insert ใหม่
+          final existing = await Supabase.instance.client
+              .from('dormitory_members')
+              .select('id, status')
+              .eq('user_id', uid)
+              .eq('dormitory_id', dormitoryId)
+              .maybeSingle();
+
+          print('🔍 existing record: $existing');
+
+          if (existing == null) {
+            // ไม่มี record ในหอนี้ → insert ใหม่
+            final insertData = {
+              'user_id': uid,
+              'dormitory_id': dormitoryId,
+              'status': 'pending',
+              'member_type': memberType,
+              'room_id': roomId,
+              'created_at': DateTime.now().toIso8601String(),
+            };
+            print('🔍 Inserting: $insertData');
+            await Supabase.instance.client
+                .from('dormitory_members')
+                .insert(insertData);
+            print('✅ Insert success');
+          } else if (existing['status'] != 'pending') {
+            // มี record เดิม (rejected/approved/left) → update กลับเป็น pending
+            await Supabase.instance.client
+                .from('dormitory_members')
+                .update({
+                  'status': 'pending',
+                  'member_type': memberType,
+                  'room_id': roomId,
+                  'created_at': DateTime.now().toIso8601String(),
+                })
+                .eq('id', existing['id']);
+            print('✅ Update existing record → pending');
+          } else {
+            print('⚠️ Already has pending request');
+          }
+        }
+      } catch (e) {
+        print('❌ submit request error: $e');
+      }
       widget.onSubmit?.call();
     }
   }
@@ -496,7 +661,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
           ? SizedBox(
               width: double.infinity,
               height: 50,
-              child: _primaryButton('ถัดไป', _onNext),
+              child: _primaryButton('ถัดไป', () => _onNext()),
             )
           : Row(
               children: [
@@ -528,7 +693,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                     height: 50,
                     child: _primaryButton(
                       _currentStep == 3 ? 'ยืนยัน' : 'ถัดไป',
-                      _onNext,
+                      () => _onNext(),
                     ),
                   ),
                 ),

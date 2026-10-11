@@ -11,6 +11,7 @@ class HomeUserScreen extends StatefulWidget {
   final ValueChanged<String>? onNavigateToAnnounceDetails;
   final VoidCallback? onNavigateToProfile;
   final bool isRoommate;
+  final bool hasRoom;
   final String userName;
   final String userPhone;
   final String roomNumber;
@@ -28,6 +29,7 @@ class HomeUserScreen extends StatefulWidget {
     this.onNavigateToAnnounceDetails,
     this.onNavigateToProfile,
     this.isRoommate = false,
+    this.hasRoom = true,
     this.userName = 'พัชราวรรณ  ศรีบุญ',
     this.userPhone = '099-9999999',
     this.roomNumber = 'A303',
@@ -65,26 +67,28 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionLabel('ค่าเช่าเดือนนี้'),
-                    const SizedBox(height: 10),
-                    _buildRentCard(),
-                    const SizedBox(height: 20),
-                    _buildSectionLabel('แจ้งซ่อม'),
-                    const SizedBox(height: 10),
-                    _buildRepairCard(),
-                    const SizedBox(height: 20),
-                    _buildSectionLabel('ประกาศล่าสุด'),
-                    const SizedBox(height: 10),
-                    _buildAnnouncementRow(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
+              child: widget.hasRoom
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionLabel('ค่าเช่าเดือนนี้'),
+                          const SizedBox(height: 10),
+                          _buildRentCard(),
+                          const SizedBox(height: 20),
+                          _buildSectionLabel('แจ้งซ่อม'),
+                          const SizedBox(height: 10),
+                          _buildRepairCard(),
+                          const SizedBox(height: 20),
+                          _buildSectionLabel('ประกาศล่าสุด'),
+                          const SizedBox(height: 10),
+                          _buildAnnouncementRow(),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    )
+                  : _buildNoRoomEmptyState(),
             ),
             _buildBottomNav(),
           ],
@@ -135,15 +139,16 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
                   ),
                 ),
                 SizedBox(height: 4),
-                Text(
-                  'ห้อง ${widget.roomNumber}',
-                  style: TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                    color: Color(0xFF000000),
+                if (widget.roomNumber.isNotEmpty)
+                  Text(
+                    'ห้อง ${widget.roomNumber}',
+                    style: const TextStyle(
+                      fontFamily: 'Prompt',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF000000),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -163,6 +168,74 @@ class _HomeUserScreenState extends State<HomeUserScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---- Empty state เมื่อยังไม่ได้เข้าร่วมหอพัก ----
+  Widget _buildNoRoomEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEAF2FB),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.meeting_room_outlined,
+                  size: 48, color: Color(0xFF4F8FDB)),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'ยังไม่ได้เข้าร่วมหอพัก',
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'คุณยังไม่ได้เข้าร่วมห้องพักใด\nไปที่หน้าโปรไฟล์เพื่อเข้าร่วมห้องพัก',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 14,
+                color: Colors.black.withValues(alpha: 0.45),
+                height: 1.6,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: widget.onNavigateToProfile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F8FDB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                ),
+                child: const Text(
+                  'ไปหน้าโปรไฟล์',
+                  style: TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

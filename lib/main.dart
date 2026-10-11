@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
 import 'services/auth_service.dart';
 import 'services/mock_service.dart';
+import 'services/tenant_auth_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'user/onboarding_screen.dart';
 import 'user/select_user.dart';
@@ -39,23 +41,24 @@ import 'user/participate.dart';
 import 'user/join_the_room.dart';
 import 'user/close_account.dart';
 import 'user/deletion_failed.dart';
-import 'user/apply_tenant.dart';
 import 'user/application_process.dart';
-import 'sign_up_admin.dart';
+import 'user/pending_room_transfer.dart';
 import 'select_dormitory.dart';
 import 'build_new_dormitory.dart';
 import 'Dashboard.dart';
 import 'tenant_bill.dart';
 import 'tenant.dart';
-import 'master_tenant.dart';
+import 'tenant_details.dart';
 import 'edite_tenant.dart';
+import 'edite_announce.dart';
+import 'edite_tenant_bill.dart';
 import 'notification.dart';
-import 'request.dart' as request;
+import 'request.dart';
 import 'dormitory_request.dart';
-import 'roommate_request.dart';
-import 'request_change_tenant.dart';
 import 'report_a_repair.dart';
 import 'chat_admin.dart';
+import 'user/tenant_google_signup.dart';
+import 'user/tenant_dashboard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,6 +73,20 @@ Future<void> main() async {
 
 final supabase = Supabase.instance.client;
 final authService = AuthService();
+
+/// Generate UUID v4 โดยไม่ต้องใช้ package
+String _generateUuid() {
+  final rng = Random.secure();
+  final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+  String hex(int b) => b.toRadixString(16).padLeft(2, '0');
+  return '${hex(bytes[0])}${hex(bytes[1])}${hex(bytes[2])}${hex(bytes[3])}'
+      '-${hex(bytes[4])}${hex(bytes[5])}'
+      '-${hex(bytes[6])}${hex(bytes[7])}'
+      '-${hex(bytes[8])}${hex(bytes[9])}'
+      '-${hex(bytes[10])}${hex(bytes[11])}${hex(bytes[12])}${hex(bytes[13])}${hex(bytes[14])}${hex(bytes[15])}';
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -125,8 +142,8 @@ enum AppScreen {
   participate,
   joinTheRoom,
   closeAccount,
-  applyTenant,
   applicationProcess,
+  pendingRoomTransfer,
   deletionFailed,
   signUpAdmin,
   selectDormitory,
@@ -137,13 +154,15 @@ enum AppScreen {
   editeTenant,
   notification,
   dormitoryRequest,
-  roommateRequest,
-  requestChangeTenant,
-   reportRepair,
-chatAdmin,
-    tenantBill,
-    request,
-    announceAdmin,
+  reportRepair,
+  chatAdmin,
+  tenantBill,
+  request,
+  announceAdmin,
+  editeAnnounce,
+  editeTenantBill,
+  tenantSignup,
+  tenantDashboard,
 }
 
 class AppScreenManager extends StatefulWidget {
@@ -168,15 +187,41 @@ class _AppScreenManagerState extends State<AppScreenManager> {
   bool _isRoommate = false; // true = สมัครด้วยรหัสคำเชิญ
   bool _isAdmin = false; // true = ผู้ดูแล
   Map<String, String> _rentalInfo = {}; // ข้อมูลการเช่าที่บันทึก
+
+  Future<void> _loadRentalInfo() async {
+    final info = await TenantAuthService().getTenantRentalInfo();
+    if (info != null) {
+      setState(() {
+        _rentalInfo = info;
+      });
+    }
+  }
   AppScreen _previousScreen = AppScreen.homeUser; // หน้าก่อนหน้าสำหรับ back
   String _selectedAnnouncementImage = 'assets/images/announcement_1.png';
   bool _isAdminAnnounceDetails = false; // true = เปิด details จากฝั่ง admin
   String? _dormitoryId; // admin's dormitory id
+  final _requestKey = GlobalKey<RequestScreenState>();
+  final _dormitoryRequestKey =
+      GlobalKey<DormitoryRequestScreenState>();
+  final _invitationCodeKey = GlobalKey<InvitationCodeScreenState>();
+  final _roomMembersKey = GlobalKey<RoomMembersScreenState>();
+  String? _selectedDormRequestId;
+  String? _tenantUserId;
+  int _announceReloadSeq = 0; // เพิ่มเพื่อ reload หน้า announce admin
 
   // ── Mock/Supabase data ────────────────────────────────────
   Map<String, dynamic> _currentBill = {};
   Map<String, int> _dashboardStats = {};
   List<Map<String, String>> _tenantList = [];
+  Map<int, String> _tenantStatuses = {};
+  Map<String, String> _selectedTenantData = {};
+  String? _selectedMemberId;
+
+  /// เพิ่มทุกครั้งที่ผู้เช่าเข้าสู่ขั้นตอน "รอผลอนุมัติ" ใหม่
+  /// ใช้เป็น key ของ SendRequestScreen เพราะทั้งหมดอยู่ใน IndexedStack
+  /// (ถ้าไม่เปลี่ยน key หน้าจอจะเก็บสถานะเก่าไว้ เช่น rejected ค้างแม้สมัครใหม่)
+  int _sendRequestSeq = 0;
+  int _selectedTenantIndex = -1;
   List<Map<String, String>> _repairRequests = [];
   List<Map<String, String>> _announcements = [];
   Map<String, dynamic> _tenantRoom = {};
@@ -191,6 +236,11 @@ class _AppScreenManagerState extends State<AppScreenManager> {
   }
 
   Future<void> _loadMockData() async {
+    // โหลด dormitoryId ของ admin ก่อน (กรณี login ใหม่หรือ hot reload)
+    if (_dormitoryId == null) {
+      _dormitoryId = await mockService.getAdminDormitoryId();
+    }
+
     final results = await Future.wait([
       mockService.getCurrentBill(),
       mockService.getDashboardStats(dormitoryId: _dormitoryId),
@@ -215,13 +265,17 @@ class _AppScreenManagerState extends State<AppScreenManager> {
     final user = await mockService.getCurrentUser();
     final room = await mockService.getTenantRoom();
     final bill = await mockService.getCurrentBill();
+    final isRoommate = await mockService.isCurrentUserRoommate();
     if (!mounted) return;
     setState(() {
       if (_userName.isEmpty) _userName = user['full_name'] ?? '';
       if (_userPhoneNumber == '099-9999999') _userPhoneNumber = user['phone'] ?? '';
       _tenantRoom  = room;
       _currentBill = bill;
+      _isRoommate  = isRoommate;
     });
+    // โหลด rental info (ห้อง/อาคาร/ชั้น) หลัง login
+    await _loadRentalInfo();
   }
 
   Future<void> _saveDormitoryAndRooms(Map<String, dynamic> data) async {
@@ -246,11 +300,18 @@ class _AppScreenManagerState extends State<AppScreenManager> {
     try {
       // 1. Insert dormitory
       final dormitoryRes = await db.from('dormitories').insert({
-        'name':       data['name'],
-        'address':    data['address'],
-        'phone':      data['phone'],
-        'owner_id':   uid,
-        'created_at': DateTime.now().toIso8601String(),
+        'dorm_code':        data['dorm_code'],
+        'name':             data['name'],
+        'dorm_name':        data['name'],
+        'address':          data['address'],
+        'phone':            int.tryParse(data['phone']?.toString() ?? ''),
+        'floor_count':      data['floorCount'],
+        'total_rooms':      data['totalRooms'],
+        'room_format':      data['roomNumberFormat'],
+        'max_tenants':      data['maxTenants'],
+        'room_arrangement': data['roomArrangement'],
+        'created_by':       uid,
+        'created_at':       DateTime.now().toIso8601String(),
       }).select('id').single();
 
       final dormitoryId = dormitoryRes['id'];
@@ -261,32 +322,89 @@ class _AppScreenManagerState extends State<AppScreenManager> {
       final roomNumberFormat = data['roomNumberFormat'] as String;
       final maxTenants       = data['maxTenants'] as int;
 
-      final roomsPerFloor  = (totalRooms / floorCount).ceil();
-      final roomsToInsert  = <Map<String, dynamic>>[];
+      final roomsToInsert = <Map<String, dynamic>>[];
 
-      for (int floor = 1; floor <= floorCount; floor++) {
-        for (int i = 1; i <= roomsPerFloor; i++) {
-          final roomIndex = (floor - 1) * roomsPerFloor + i;
-          if (roomIndex > totalRooms) break;
+      // ตรวจว่า format เป็นแบบ range "A101-A110,A201-A210" หรือเปล่า
+      final isRangeFormat = RegExp(r'\w+-\w+').hasMatch(roomNumberFormat);
 
-          String roomNumber;
-          try {
-            roomNumber = roomNumberFormat
-                .replaceAll('{floor}', floor.toString())
-                .replaceAll('{room}',  i.toString().padLeft(2, '0'));
-          } catch (_) {
-            roomNumber = '$floor${i.toString().padLeft(2, '0')}';
+      if (isRangeFormat) {
+        // --- แบบ range: แยก segment ด้วย comma แล้ว expand แต่ละ range ---
+        final segments = roomNumberFormat.split(',');
+        int floorNum = 1;
+        for (final seg in segments) {
+          final parts = seg.trim().split('-');
+          if (parts.length == 2) {
+            final fromStr = parts[0].trim();
+            final toStr   = parts[1].trim();
+            final prefixMatch = RegExp(r'^(.*?)(\d+)$').firstMatch(fromStr);
+            final prefix  = prefixMatch?.group(1) ?? '';
+            final from    = int.tryParse(prefixMatch?.group(2) ?? '') ?? 1;
+            final toNum   = int.tryParse(RegExp(r'(\d+)$').firstMatch(toStr)?.group(1) ?? '') ?? from;
+            for (int num = from; num <= toNum; num++) {
+              roomsToInsert.add({
+                'id':           _generateUuid(),
+                'dormitory_id': dormitoryId,
+                'room_number':  '$prefix$num',
+                'floor':        floorNum,
+                'building':     prefix.isNotEmpty ? prefix : 'A',
+                'max_tenants':  maxTenants,
+                'status':       roomArrangement == 'empty' ? 'vacant' : 'occupied',
+                'created_at':   DateTime.now().toIso8601String(),
+              });
+            }
           }
+          floorNum++;
+        }
+      } else {
+        // --- แบบ auto-generate: {floor}/{room} หรือ A101 หรือ นับเรื่อยๆ ---
+        final roomsPerFloor = (totalRooms / floorCount).ceil();
 
-          roomsToInsert.add({
-            'dormitory_id': dormitoryId,
-            'room_number':  roomNumber,
-            'floor':        floor,
-            'building':     roomNumberFormat.isNotEmpty ? roomNumberFormat[0] : 'A',
-            'max_tenants':  maxTenants,
-            'status':       roomArrangement == 'empty' ? 'vacant' : 'occupied',
-            'created_at':   DateTime.now().toIso8601String(),
-          });
+        for (int floor = 1; floor <= floorCount; floor++) {
+          for (int i = 1; i <= roomsPerFloor; i++) {
+            final roomIndex = (floor - 1) * roomsPerFloor + i;
+            if (roomIndex > totalRooms) break;
+
+            String roomNumber;
+            final format = roomNumberFormat.trim();
+            if (format.contains('{floor}') || format.contains('{room}')) {
+              roomNumber = format
+                  .replaceAll('{floor}', floor.toString())
+                  .replaceAll('{room}', i.toString().padLeft(2, '0'));
+            } else {
+              final floorAwareMatch =
+                  RegExp(r'^(.*?)([1-9])(\d{2,})$').firstMatch(format);
+              final prefixStr    = floorAwareMatch?.group(1) ?? '';
+              final floorDigitVal = int.tryParse(floorAwareMatch?.group(2) ?? '');
+              final roomSuffix   = floorAwareMatch?.group(3);
+
+              if (floorAwareMatch != null && floorDigitVal == 1 && floorCount > 1) {
+                final roomPad = roomSuffix!.length;
+                roomNumber = '$prefixStr$floor${i.toString().padLeft(roomPad, '0')}';
+              } else {
+                final simpleMatch = RegExp(r'(\d+)\s*$').firstMatch(format);
+                if (simpleMatch == null) {
+                  roomNumber = '$format$roomIndex';
+                } else {
+                  final digits = simpleMatch.group(1) ?? '';
+                  final start  = int.tryParse(digits) ?? 1;
+                  final seq    = start + roomIndex - 1;
+                  roomNumber =
+                      '${format.substring(0, simpleMatch.start)}${seq.toString().padLeft(digits.length, '0')}';
+                }
+              }
+            }
+
+            roomsToInsert.add({
+              'id':           _generateUuid(),
+              'dormitory_id': dormitoryId,
+              'room_number':  roomNumber,
+              'floor':        floor,
+              'building':     roomNumberFormat.isNotEmpty ? roomNumberFormat[0] : 'A',
+              'max_tenants':  maxTenants,
+              'status':       roomArrangement == 'empty' ? 'vacant' : 'occupied',
+              'created_at':   DateTime.now().toIso8601String(),
+            });
+          }
         }
       }
 
@@ -304,22 +422,68 @@ class _AppScreenManagerState extends State<AppScreenManager> {
   void _navigateTo(AppScreen screen) {
     setState(() {
       _currentScreen = screen;
-      if (screen == AppScreen.dashboard ||
-          screen == AppScreen.tenantBill ||
-          screen == AppScreen.billDetails ||
-          screen == AppScreen.buildNewDormitory ||
-          screen == AppScreen.selectDormitory) {
-        _isAdmin = true;
-      } else if (screen == AppScreen.selectUser || screen == AppScreen.signIn) {
-        _isAdmin = false;
+      // หน้าที่ใช้ร่วมกันทั้ง admin/user (profile, request, notification,
+      // reportRepair ฯลฯ) ให้คงค่า _isAdmin เดิมไว้ ไม่คำนวณใหม่
+      const sharedScreens = {
+        AppScreen.profile,
+        AppScreen.request,
+        AppScreen.dormitoryRequest,
+        AppScreen.reportRepair,
+        AppScreen.chatAdmin,
+        AppScreen.announceAdmin,
+        AppScreen.announceDetails,
+        AppScreen.changeNumber,
+        AppScreen.changePassword,
+        AppScreen.confirmChangeNumber,
+        AppScreen.confirmChangePassword,
+        AppScreen.otp,
+        AppScreen.privacyPolicy,
+        AppScreen.termsOfUse,
+        AppScreen.dara,
+      };
+
+      if (!sharedScreens.contains(screen)) {
+        _isAdmin = screen == AppScreen.dashboard ||
+            screen == AppScreen.tenantBill ||
+            screen == AppScreen.billDetails ||
+            screen == AppScreen.buildNewDormitory ||
+            screen == AppScreen.selectDormitory;
+        if (screen == AppScreen.selectUser || screen == AppScreen.signIn) {
+          _isAdmin = false;
+        }
       }
       if (screen == AppScreen.onboarding) {
         _onboardingPage = 0;
       }
     });
+
+    if (screen == AppScreen.request) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _requestKey.currentState?.refresh();
+      });
+    }
+    if (screen == AppScreen.dormitoryRequest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _dormitoryRequestKey.currentState?.refresh();
+      });
+    }
+  }
+
+  Future<void> _handleTenantSignUpDone() async {
+    // เก็บ uid ของผู้เช่าที่สมัครผ่าน Google ไว้ให้ SendRequestScreen poll
+    // แล้วเข้าหน้ารอผลเหมือนผู้สมัครผ่าน OTP (ไม่ใช้หน้ารอแยกอีกชุด)
+    _tenantUserId = supabase.auth.currentUser?.id;
+    _sendRequestSeq++;
+    setState(() {
+      _isAdmin = false;
+      _currentScreen = AppScreen.sendRequest;
+    });
   }
 
   void _navigateToVerify(String phoneNumber) {
+    // บันทึก uid ผู้เช่าไว้ตอนนี้ เพราะ session ปัจจุบันคือผู้เช่าที่เพิ่งสมัคร
+    _tenantUserId = supabase.auth.currentUser?.id;
+    _sendRequestSeq++;
     setState(() {
       _currentScreen = AppScreen.verifyNumber;
       _verifyPhoneNumber = phoneNumber;
@@ -367,7 +531,13 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             phoneNumber: _verifyPhoneNumber,
           ),
           SendRequestScreen(
-            onTap: () => _navigateTo(AppScreen.alreadyApproved),
+            key: ValueKey('sendRequest_$_sendRequestSeq'),
+            userId: _tenantUserId,
+            onApproved: () async {
+              await _reloadAfterLogin();
+              _navigateTo(AppScreen.homeUser);
+            },
+            onRejected: () => _navigateTo(AppScreen.signUp),
           ),
           AlreadyApprovedScreen(
             onPressed: () => _navigateTo(AppScreen.homeUser),
@@ -396,9 +566,10 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             },
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
             isRoommate: _isRoommate,
+            hasRoom: (_tenantRoom['room_number']?.toString() ?? '').isNotEmpty,
             userName: _userName,
             userPhone: _userPhoneNumber,
-            roomNumber: _tenantRoom['room_number'] ?? 'A303',
+            roomNumber: _tenantRoom['room_number']?.toString() ?? '',
             currentBill: _currentBill,
             announcements: _announcements,
           ),
@@ -442,16 +613,17 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             onNavigateToAnnounce: () => _navigateTo(AppScreen.announce),
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
             currentBill: _currentBill,
+            hasRoom: (_tenantRoom['room_number']?.toString() ?? '').isNotEmpty,
           ),
-          Builder(
-            builder: (_) => BillScreen(
-              onBack: () => _navigateTo(_previousScreen),
-              onNavigateToPayment: () {
-                setState(() {
-                  _previousScreen = AppScreen.bill;
-                  _currentScreen = AppScreen.payment;
-                });
-              },
+            Builder(
+              builder: (_) => BillScreen(
+                onBack: () => _navigateTo(_previousScreen),
+                onNavigateToPayment: () {
+                  setState(() {
+                    _previousScreen = AppScreen.bill;
+                    _currentScreen = AppScreen.payment;
+                  });
+                },
             ),
           ),
           Builder(
@@ -498,6 +670,7 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             },
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
             announcements: _announcements,
+            hasRoom: (_tenantRoom['room_number']?.toString() ?? '').isNotEmpty,
           ),
           Builder(
             builder: (_) => AnnounceDetailsScreen(
@@ -533,9 +706,14 @@ class _AppScreenManagerState extends State<AppScreenManager> {
                 _navigateTo(AppScreen.rentalInformation),
             onNavigateToTermsOfUse: () => _navigateTo(AppScreen.termsOfUse),
             onNavigateToDara: () => _navigateTo(AppScreen.dara),
-            onNavigateToRoomMembers: () => _navigateTo(AppScreen.roomMembers),
+            onNavigateToRoomMembers: () {
+              // หน้านี้อยู่ใน IndexedStack → ต้องโหลดข้อมูลสมาชิกใหม่เอง
+              _roomMembersKey.currentState?.reload();
+              _navigateTo(AppScreen.roomMembers);
+            },
             onNavigateToCloseAccount: () => _navigateTo(AppScreen.closeAccount),
             onLeaveRoom: () => _navigateTo(AppScreen.leaveTheRoom),
+            onNavigateToParticipate: () => _navigateTo(AppScreen.participate),
             onUpgradeToTenant: () {
               setState(() {
                 _previousScreen = AppScreen.profile;
@@ -545,10 +723,14 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             phoneNumber: _userPhoneNumber,
             isRoommate: _isRoommate,
             isAdmin: _isAdmin,
+            hasRoom: (_tenantRoom['room_number']?.toString() ?? '').isNotEmpty,
             userName: _userName,
+            roomNumber: _tenantRoom['room_number']?.toString() ?? '',
             onNavigateToTenant: () => _navigateTo(AppScreen.tenant),
             onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
-            onNavigateToNotification: () => _navigateTo(AppScreen.notification),
+            onNavigateToNotification: () => _navigateTo(AppScreen.request),
+            onNavigateToAdminBill: () => _navigateTo(AppScreen.tenantBill),
+            onNavigateToAdminAnnounce: () => _navigateTo(AppScreen.announceAdmin),
           ),
           ChangeNumberScreen(
             key: ValueKey('change_$_changeNumberFlowKey'),
@@ -604,7 +786,10 @@ class _AppScreenManagerState extends State<AppScreenManager> {
           RentalInformationScreen(
             key: ValueKey('rentalinfo_$_rentalInfoKey'),
             onBack: () => _navigateTo(AppScreen.profile),
-            onEdit: () => _navigateTo(AppScreen.editeRentalInformation),
+            onEdit: () async {
+              await _loadRentalInfo();
+              _navigateTo(AppScreen.editeRentalInformation);
+            },
             userName: _userName,
             userPhone: _userPhoneNumber,
             rentalInfo: _rentalInfo,
@@ -615,7 +800,17 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             key: ValueKey('edite_$_rentalInfoKey'),
             rentalInfo: _rentalInfo,
             onBack: () => _navigateTo(AppScreen.rentalInformation),
-            onSave: (data) {
+            onSave: (data) async {
+              // Save to Supabase
+              await TenantAuthService().saveTenantPersonalInfo(
+                idCard: data['idCard'] ?? '',
+                birthdate: data['birthdate'] ?? '',
+                gender: data['gender'] ?? '',
+                address: data['address'] ?? '',
+                emergencyContact: data['emergencyContact'] ?? '',
+                emergencyPhone: data['emergencyPhone'] ?? '',
+              );
+
               setState(() {
                 _rentalInfo = data;
                 _rentalInfoKey++;
@@ -646,20 +841,41 @@ class _AppScreenManagerState extends State<AppScreenManager> {
           ),
           ContactUsScreen(onBack: () => _navigateTo(AppScreen.profile)),
           RoomMembersScreen(
+            key: _roomMembersKey,
+            isRoommate: _isRoommate,
             onBack: () => _navigateTo(AppScreen.profile),
-            onNavigateToInvitationCode: () =>
-                _navigateTo(AppScreen.invitationCode),
+            onNavigateToInvitationCode: () {
+              // หน้ารหัสเชิญอยู่ใน IndexedStack → ต้องสั่งโหลดใหม่เอง
+              // ไม่งั้นจะค้างสถานะจากตอนแอปเริ่มทำงาน
+              _invitationCodeKey.currentState?.reload();
+              _navigateTo(AppScreen.invitationCode);
+            },
           ),
           InvitationCodeScreen(
+            key: _invitationCodeKey,
             onBack: () => _navigateTo(AppScreen.roomMembers),
           ),
           LeaveTheRoomScreen(
             onBack: () => _navigateTo(AppScreen.profile),
-            onConfirmLeave: () => _navigateTo(AppScreen.participate),
+            onConfirmLeave: () {
+              // leave แล้ว clear state ตรงๆ (ไม่ reload เพราะ record ถูกลบแล้ว)
+              setState(() {
+                _isRoommate = false;
+                _tenantRoom = {};
+                _rentalInfo = {};
+              });
+              _navigateTo(AppScreen.profile);
+            },
           ),
           ParticipateScreen(
+            onBack: () => _navigateTo(AppScreen.profile),
             onJoinWithCode: () => _navigateTo(AppScreen.joinTheRoom),
-            onRegisterAsTenant: () => _navigateTo(AppScreen.applyTenant),
+            onRegisterAsTenant: () {
+              setState(() {
+                _previousScreen = AppScreen.participate;
+                _currentScreen = AppScreen.applicationProcess;
+              });
+            },
           ),
           JoinTheRoomScreen(
             onBack: () => _navigateTo(AppScreen.participate),
@@ -669,32 +885,35 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             onBack: () => _navigateTo(AppScreen.profile),
             onCloseAccount: () => _navigateTo(AppScreen.deletionFailed),
           ),
-          ApplyTenantScreen(
-            onBack: () => _navigateTo(AppScreen.participate),
-            onApply: () {
-              setState(() {
-                _previousScreen = AppScreen.applyTenant;
-                _currentScreen = AppScreen.applicationProcess;
-              });
-            },
-          ),
           Builder(
             builder: (_) => ApplicationProcessScreen(
-              onBack: () => _navigateTo(AppScreen.profile),
-              onSubmit: () => _navigateTo(AppScreen.homeUser),
+            onBack: () async {
+              await _loadRentalInfo();
+              _navigateTo(AppScreen.profile);
+            },
+              onSubmit: () => _navigateTo(AppScreen.pendingRoomTransfer),
               userName: _userName,
               userPhone: _userPhoneNumber,
             ),
+          ),
+          PendingRoomTransferScreen(
+            onBack: () => _navigateTo(AppScreen.applicationProcess),
+            onApproved: () async {
+              await _reloadAfterLogin();
+              _navigateTo(AppScreen.homeUser);
+            },
+            onRejected: () => _navigateTo(AppScreen.profile),
           ),
           DeletionFailedScreen(
             onBack: () => _navigateTo(AppScreen.closeAccount),
             onContactAdmin: () => _navigateTo(AppScreen.dara),
             onBackToSettings: () => _navigateTo(AppScreen.profile),
           ),
-          SignUpAdminScreen(
+          SignUpUserScreen(
             onBack: () => _navigateTo(AppScreen.selectUser),
             onNavigateToSignIn: () => _navigateTo(AppScreen.signIn),
-            onSignUp: (name, phone) {
+            isAdmin: true,
+            onSignUpAdmin: (name, phone) {
               setState(() {
                 _userName = name;
                 _userPhoneNumber = phone;
@@ -719,53 +938,87 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             adminName: _userName.isEmpty ? 'พัชราวรรณ  ศรีบุญ' : _userName,
             onNavigateToTenant: () => _navigateTo(AppScreen.tenant),
             onNavigateToBill: () => _navigateTo(AppScreen.tenantBill),
-            onNavigateToNotification: () => _navigateTo(AppScreen.announceAdmin),
+            onNavigateToNotification: () => _navigateTo(AppScreen.request),
+            onNavigateToAnnounce: () => _navigateTo(AppScreen.announceAdmin),
             onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
             stats: _dashboardStats,
             repairRequests: _repairRequests,
           ),
           TenantScreen(
-            onNavigateToDashboard: () => _navigateTo(AppScreen.dashboard),
-            onNavigateToMasterTenant: () => _navigateTo(AppScreen.masterTenant),
-            onNavigateToEditeTenant: () => _navigateTo(AppScreen.editeTenant),
-            onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
-            onNavigateToProfile: () => _navigateTo(AppScreen.profile),
-            tenants: _tenantList,
+        onNavigateToDashboard: () => _navigateTo(AppScreen.dashboard),
+        onNavigateToMasterTenant: () {
+          if (_selectedTenantIndex >= 0) {
+            _selectedTenantData = _tenantList[_selectedTenantIndex];
+          }
+          _navigateTo(AppScreen.masterTenant);
+        },
+        onNavigateToEditeTenant: () => _navigateTo(AppScreen.editeTenant),
+        onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
+        onNavigateToProfile: () => _navigateTo(AppScreen.profile),
+        onNavigateToBill: () => _navigateTo(AppScreen.tenantBill),
+        onNavigateToAnnounce: () => _navigateTo(AppScreen.announceAdmin),
+        tenants: _tenantList,
+        selectedTenantIndex: (index) {
+          _selectedTenantIndex = index;
+          if (index >= 0 && index < _tenantList.length) {
+            _selectedTenantData = _tenantList[index];
+            _selectedMemberId = _tenantList[index]['member_id'];
+            _tenantStatuses[index] = _tenantList[index]['status'] ?? 'กำลังเช่า';
+          }
+        },
+        onTenantSelected: () {},
           ),
           MasterTenantScreen(
             onBack: () => _navigateTo(AppScreen.tenant),
             onEdit: () => _navigateTo(AppScreen.editeTenant),
             onDelete: () => _navigateTo(AppScreen.tenant),
+            tenantData: _selectedTenantData.isNotEmpty
+                ? _selectedTenantData
+                : null,
+            memberId: _selectedMemberId,
+            currentStatus: _tenantStatuses[_selectedTenantIndex] ?? 'กำลังเช่า',
+            onRefresh: () {
+              setState(() {});
+            },
           ),
           EditeTenantScreen(
             onBack: () => _navigateTo(AppScreen.masterTenant),
             onSave: () => _navigateTo(AppScreen.masterTenant),
+            currentStatus: _tenantStatuses[_selectedTenantIndex] ?? 'กำลังเช่า',
+            memberId: _selectedMemberId,
+            onRentalSaved: () {
+              setState(() {});
+            },
+            onStatusSaved: (status) {
+              setState(() {
+                _tenantStatuses[_selectedTenantIndex] = status;
+                if (_selectedTenantIndex >= 0 && _selectedTenantIndex < _tenantList.length) {
+                  _tenantList = List.from(_tenantList);
+                  _tenantList[_selectedTenantIndex] = Map.from(_tenantList[_selectedTenantIndex])
+                    ..['status'] = status;
+                }
+              });
+            },
           ),
           NotificationScreen(
             onBack: () => _navigateTo(AppScreen.profile),
             isTenant: !_isAdmin,
           ),
           DormitoryRequestScreen(
+            key: _dormitoryRequestKey,
+            requestId: _selectedDormRequestId,
             onBack: () => _navigateTo(AppScreen.request),
-            onApprove: () => _navigateTo(AppScreen.request),
-            onReject: () => _navigateTo(AppScreen.request),
-          ),
-          RoommateRequestScreen(
-            onBack: () => _navigateTo(AppScreen.request),
-            onApprove: () => _navigateTo(AppScreen.request),
-            onReject: () => _navigateTo(AppScreen.request),
-          ),
-          RequestChangeTenantScreen(
-            onBack: () => _navigateTo(AppScreen.request),
-            onApprove: () => _navigateTo(AppScreen.request),
-            onReject: () => _navigateTo(AppScreen.request),
+            onApprove: () => _requestKey.currentState?.refresh(),
+            onReject: () => _requestKey.currentState?.refresh(),
           ),
           ReportARepairScreen(
             onNavigateToDashboard: () => _navigateTo(AppScreen.dashboard),
             onNavigateToTenant: () => _navigateTo(AppScreen.tenant),
             onNavigateToChatAdmin: () => _navigateTo(AppScreen.chatAdmin),
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
+            onNavigateToBill: () => _navigateTo(AppScreen.tenantBill),
+            onNavigateToAnnounce: () => _navigateTo(AppScreen.announceAdmin),
           ),
           ChatAdminScreen(
             onBack: () => _navigateTo(AppScreen.reportRepair),
@@ -777,6 +1030,7 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
             onNavigateToAnnouncement: () => _navigateTo(AppScreen.announceAdmin),
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
+            onCreateBill: () => _navigateTo(AppScreen.editeTenantBill),
             onTapBill: (bill) {
               setState(() {
                 _selectedBill = bill;
@@ -789,18 +1043,21 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             tenants: _tenantList,
             currentBill: _currentBill,
           ),
-          request.NotificationScreen(
+          RequestScreen(
+            key: _requestKey,
             onBack: () => _navigateTo(AppScreen.dashboard),
-            onNavigateToDormitoryRequest:
-                () => _navigateTo(AppScreen.dormitoryRequest),
-            onNavigateToRoommateRequest:
-                () => _navigateTo(AppScreen.roommateRequest),
-            onNavigateToRequestChangeTenant:
-                () => _navigateTo(AppScreen.requestChangeTenant),
+            onNavigateToDormitoryRequest: (requestId) {
+              setState(() => _selectedDormRequestId = requestId);
+              _navigateTo(AppScreen.dormitoryRequest);
+            },
           ),
+          // announceAdmin (index 51)
           AnnounceScreen(
+            key: ValueKey('announceAdmin_$_announceReloadSeq'),
             onNavigateToHome: () => _navigateTo(AppScreen.dashboard),
+            onNavigateToTenant: () => _navigateTo(AppScreen.tenant),
             onNavigateToRentalFee: () => _navigateTo(AppScreen.tenantBill),
+            onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
             onNavigateToChat: () => _navigateTo(AppScreen.chatAdmin),
             onNavigateToDetails: (imagePath) {
               setState(() {
@@ -810,9 +1067,32 @@ class _AppScreenManagerState extends State<AppScreenManager> {
               _navigateTo(AppScreen.announceDetails);
             },
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
-            announcements: _announcements,
             isAdmin: true,
+            onAddAnnouncement: () => _navigateTo(AppScreen.editeAnnounce),
           ),
+          // editeAnnounce (index 52)
+          EditeAnnounceScreen(
+            onBack: () => _navigateTo(AppScreen.announceAdmin),
+            onSave: () {
+              setState(() => _announceReloadSeq++); // reload announce admin
+              _navigateTo(AppScreen.announceAdmin);
+            },
+          ),
+          // editeTenantBill
+          EditeTenantBillScreen(
+            onBack: () => _navigateTo(AppScreen.tenantBill),
+            onSave: () => _navigateTo(AppScreen.tenantBill),
+            onManualEntry: () => _navigateTo(AppScreen.tenantBill), // TODO: หน้ากรอกบิล
+            initialData: _selectedTenantData.isNotEmpty ? _selectedTenantData : null,
+          ),
+          // ── Tenant Google Sign Up (index 53) ──
+          TenantGoogleSignupScreen(
+            onBack: () => _navigateTo(AppScreen.selectUser),
+            onRequestSent: _handleTenantSignUpDone,
+            onNavigateToSignIn: () => _navigateTo(AppScreen.signIn),
+          ),
+          // ── Tenant Dashboard (index 53) ──
+          TenantDashboardScreen(),
         ],
       ),
     );

@@ -4,11 +4,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 class ParticipateScreen extends StatelessWidget {
   final VoidCallback? onJoinWithCode;
   final VoidCallback? onRegisterAsTenant;
+  final VoidCallback? onBack;
 
   const ParticipateScreen({
     super.key,
     this.onJoinWithCode,
     this.onRegisterAsTenant,
+    this.onBack,
   });
 
   @override
@@ -21,7 +23,18 @@ class ParticipateScreen extends StatelessWidget {
         ),
         child: Column(
           children: [
-            const SizedBox(height: 60),
+            // ปุ่มย้อนกลับ
+            Padding(
+              padding: const EdgeInsets.only(left: 4, top: 48),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.chevron_left,
+                      size: 28, color: Color(0xFF1A1A2E)),
+                  onPressed: onBack,
+                ),
+              ),
+            ),
             const Spacer(),
             // Illustration
             SvgPicture.asset(

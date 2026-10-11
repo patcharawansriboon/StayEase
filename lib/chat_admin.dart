@@ -301,15 +301,6 @@ class _ChatAdminScreenState extends State<ChatAdminScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'ผู้เช่า',
-              style: TextStyle(
-                fontFamily: 'Prompt',
-                fontSize: 12,
-                color: Color(0xFF999999),
-              ),
-            ),
-            const SizedBox(height: 4),
             CircleAvatar(
               radius: 18,
               backgroundImage:
@@ -323,7 +314,15 @@ class _ChatAdminScreenState extends State<ChatAdminScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
+              const Text(
+                'ผู้เช่า',
+                style: TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 12,
+                  color: Color(0xFF999999),
+                ),
+              ),
+              const SizedBox(height: 4),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

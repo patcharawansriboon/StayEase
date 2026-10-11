@@ -6,17 +6,21 @@ import 'package:flutter/services.dart';
 class SignUpUserScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onNavigateToSignIn;
-  final ValueChanged<String> onNavigateToVerify;
+  final ValueChanged<String>? onNavigateToVerify;
   final ValueChanged<bool>? onInviteCodeChanged;
   final void Function(String name, String phone)? onUserDataChanged;
+  final bool isAdmin;
+  final void Function(String name, String phone)? onSignUpAdmin;
 
   const SignUpUserScreen({
     super.key,
     required this.onBack,
     required this.onNavigateToSignIn,
-    required this.onNavigateToVerify,
+    this.onNavigateToVerify,
     this.onInviteCodeChanged,
     this.onUserDataChanged,
+    this.isAdmin = false,
+    this.onSignUpAdmin,
   });
 
   @override
@@ -27,6 +31,7 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _dormCodeController = TextEditingController();
+  final _roomNumberController = TextEditingController();
   final _inviteCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -54,6 +59,7 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _dormCodeController.dispose();
+    _roomNumberController.dispose();
     _inviteCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -146,35 +152,58 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // รหัสหอพัก
-                  _buildLabel('รหัสหอพัก'),
-                  const SizedBox(height: 8),
-                  _buildTextField(
-                    controller: _dormCodeController,
-                    hint: 'กรุณากรอกรหัสหอพัก',
-                  ),
-                  const SizedBox(height: 16),
+                  if (!widget.isAdmin) ...[
+                    // รหัสหอพัก
+                    _buildLabel('รหัสหอพัก'),
+                    const SizedBox(height: 8),
+                    _buildTextField(
+                      controller: _dormCodeController,
+                      hint: 'กรุณากรอกรหัสหอพัก',
+                    ),
+                    const SizedBox(height: 16),
 
-// รหัสคำเชิญ (สำหรับ Roommate)
-                  Row(
-                    children: [
-                      _buildLabel('รหัสคำเชิญ'),
-                      const SizedBox(width: 6),
-                      Text(
-                        '(สำหรับ Roommate)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: const Color(0xFF000000).withValues(alpha: 0.4),
+                    // เลขห้อง
+                    Row(
+                      children: [
+                        _buildLabel('เลขห้อง'),
+                        const SizedBox(width: 6),
+                        Text(
+                          '(ถ้าทราบ)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: const Color(0xFF000000).withValues(alpha: 0.4),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildTextField(
-                    controller: _inviteCodeController,
-                    hint: 'กรุณากรอกรหัสคำเชิญ',
-                  ),
-                  const SizedBox(height: 16),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildTextField(
+                      controller: _roomNumberController,
+                      hint: 'กรุณากรอกเลขห้อง',
+                    ),
+                    const SizedBox(height: 16),
+
+                    // รหัสคำเชิญ (สำหรับ Roommate)
+                    Row(
+                      children: [
+                        _buildLabel('รหัสคำเชิญ'),
+                        const SizedBox(width: 6),
+                        Text(
+                          '(สำหรับ Roommate)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: const Color(0xFF000000).withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildTextField(
+                      controller: _inviteCodeController,
+                      hint: 'กรุณากรอกรหัสคำเชิญ',
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // รหัสผ่าน
                   _buildLabel('รหัสผ่าน'),
@@ -225,41 +254,72 @@ class _SignUpUserScreenState extends State<SignUpUserScreen> {
                     height: 52,
                     child: TextButton(
                       onPressed: () async {
-                        widget.onInviteCodeChanged
-                            ?.call(_inviteCodeController.text.isNotEmpty);
-                        widget.onUserDataChanged?.call(
-                          _nameController.text,
-                          _phoneController.text,
-                        );
-                        bool success = false;
-                        if (_inviteCodeController.text.isNotEmpty) {
-                          success = await AuthService().signUpRoommate(
+                        if (widget.isAdmin) {
+                          final success = await AuthService().signUpAdmin(
                             phone: _phoneController.text,
                             password: _passwordController.text,
                             fullName: _nameController.text,
-                            inviteCode: _inviteCodeController.text,
                           );
-                        } else {
-                          success = await AuthService().signUpTenant(
-                            phone: _phoneController.text,
-                            password: _passwordController.text,
-                            fullName: _nameController.text,
-                            dormCode: _dormCodeController.text,
-                          );
-                        }
-                        if (success) {
-                          widget.onNavigateToVerify(_phoneController.text);
-                        } else {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'ลงทะเบียนไม่สำเร็จ กรุณาลองอีกครั้ง',
-                                style: TextStyle(fontFamily: 'Prompt'),
+                          if (success) {
+                            widget.onSignUpAdmin?.call(
+                              _nameController.text,
+                              _phoneController.text,
+                            );
+                          } else {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'ลงทะเบียนไม่สำเร็จ กรุณาลองอีกครั้ง',
+                                  style: TextStyle(fontFamily: 'Prompt'),
+                                ),
+                                backgroundColor: const Color(0xFFFF0303),
                               ),
-                              backgroundColor: const Color(0xFFFF0303),
-                            ),
+                            );
+                          }
+                        } else {
+                          widget.onInviteCodeChanged
+                              ?.call(_inviteCodeController.text.isNotEmpty);
+                          widget.onUserDataChanged?.call(
+                            _nameController.text,
+                            _phoneController.text,
                           );
+                          bool success = false;
+                          String errorMessage = '';
+                          if (_inviteCodeController.text.isNotEmpty) {
+                            success = await AuthService().signUpRoommate(
+                              phone: _phoneController.text,
+                              password: _passwordController.text,
+                              fullName: _nameController.text,
+                              inviteCode: _inviteCodeController.text,
+                              onError: (msg) => errorMessage = msg,
+                            );
+                          } else {
+                            success = await AuthService().signUpTenant(
+                              phone: _phoneController.text,
+                              password: _passwordController.text,
+                              fullName: _nameController.text,
+                              dormCode: _dormCodeController.text,
+                              roomNumber: _roomNumberController.text,
+                              onError: (msg) => errorMessage = msg,
+                            );
+                          }
+                          if (success) {
+                            widget.onNavigateToVerify?.call(_phoneController.text);
+                          } else {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  errorMessage.isNotEmpty
+                                      ? errorMessage
+                                      : 'ลงทะเบียนไม่สำเร็จ กรุณาลองอีกครั้ง',
+                                  style: const TextStyle(fontFamily: 'Prompt'),
+                                ),
+                                backgroundColor: const Color(0xFFFF0303),
+                              ),
+                            );
+                          }
                         }
                       },
                       style: TextButton.styleFrom(

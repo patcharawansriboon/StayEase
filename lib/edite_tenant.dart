@@ -1,15 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../change_status.dart';
 
 class EditeTenantScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onSave;
+  final void Function(String status)? onStatusSaved;
+  final String? currentStatus;
+  final String? memberId;
+  final VoidCallback? onRentalSaved;
 
   const EditeTenantScreen({
     super.key,
     this.onBack,
     this.onSave,
+    this.onStatusSaved,
+    this.currentStatus,
+    this.memberId,
+    this.onRentalSaved,
   });
 
   @override
@@ -24,6 +34,16 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   final _checkOutController = TextEditingController();
   final _rentController = TextEditingController();
   final _depositController = TextEditingController();
+
+  String _status = 'กำลังเช่า';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.currentStatus != null) {
+      _status = widget.currentStatus!;
+    }
+  }
 
   final List<String> _months = [
     'ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย',
@@ -265,7 +285,24 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
         children: [
           _buildLabel('สถานะ'),
           GestureDetector(
-            onTap: () {},
+            onTap: () {
+              Navigator.push<String>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChangeStatusScreen(
+                    currentStatus: _status,
+                    onBack: () => Navigator.pop(context),
+                    onConfirm: (newStatus) {
+                      Navigator.pop(context, newStatus);
+                    },
+                  ),
+                ),
+              ).then((result) {
+                if (result != null) {
+                  setState(() => _status = result);
+                }
+              });
+            },
             child: Container(
               padding: const EdgeInsets.only(bottom: 8),
               decoration: const BoxDecoration(
@@ -274,10 +311,10 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                 ),
               ),
               child: Row(
-                children: const [
+                children: [
                   Expanded(
                     child: Text(
-                      'กำลังเช่า',
+                      _status,
                       style: TextStyle(
                         fontFamily: 'Prompt',
                         fontSize: 14,
@@ -565,6 +602,26 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
     );
   }
 
+  Future<void> _saveRentalInfo() async {
+    if (widget.memberId == null) return;
+    final db = Supabase.instance.client;
+    try {
+      await db.from('tenant_rentals').upsert({
+        'member_id': widget.memberId,
+        'building': _buildingController.text,
+        'room_number': _roomController.text,
+        'floor': _floorController.text,
+        'check_in_date': _checkInController.text,
+        'check_out_date': _checkOutController.text,
+        'rent': _rentController.text,
+        'deposit': _depositController.text,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('❌ _saveRentalInfo error: $e');
+    }
+  }
+
   void _showSaveDialog() {
     showDialog(
       context: context,
@@ -617,7 +674,15 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
+                          if (widget.memberId != null) {
+                            _saveRentalInfo().then((_) {
+                              widget.onRentalSaved?.call();
+                            });
+                          } else {
+                            widget.onRentalSaved?.call();
+                          }
                           Navigator.pop(context);
+                          widget.onStatusSaved?.call(_status);
                           widget.onSave?.call();
                         },
                         style: ElevatedButton.styleFrom(

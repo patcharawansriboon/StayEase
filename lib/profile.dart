@@ -20,29 +20,37 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback? onNavigateToCloseAccount;
   final VoidCallback? onLeaveRoom;
   final VoidCallback? onUpgradeToTenant;
+  final VoidCallback? onNavigateToParticipate;
   // admin bottom nav
   final VoidCallback? onNavigateToTenant;
   final VoidCallback? onNavigateToReportRepair;
   final VoidCallback? onNavigateToNotification;
+  final VoidCallback? onNavigateToAdminBill;
+  final VoidCallback? onNavigateToAdminAnnounce;
   final String phoneNumber;
   final bool isRoommate;
   final bool isAdmin;
+  final bool hasRoom;
   final String userName;
   final bool showSavedToast;
   final VoidCallback? onToastShown;
+  final String roomNumber;
 
   const ProfileScreen({
     super.key,
     this.isRoommate = false,
     this.isAdmin = false,
+    this.hasRoom = true,
     this.showSavedToast = false,
     this.onToastShown,
     this.onLeaveRoom,
     this.onUpgradeToTenant,
+    this.onNavigateToParticipate,
     this.onNavigateToTenant,
     this.onNavigateToReportRepair,
     this.onNavigateToNotification,
     this.userName = 'พัชราวรรณ  ศรีบุญ',
+    this.roomNumber = '',
     this.onNavigateToHome,
     this.onNavigateToDashboard,
     this.onNavigateToRentalFee,
@@ -57,6 +65,8 @@ class ProfileScreen extends StatefulWidget {
     this.onNavigateToDara,
     this.onNavigateToRoomMembers,
     this.onNavigateToCloseAccount,
+    this.onNavigateToAdminBill,
+    this.onNavigateToAdminAnnounce,
     this.phoneNumber = '099-9999999',
   });
 
@@ -90,6 +100,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.phoneNumber != widget.phoneNumber) {
       setState(() => _phoneNumber = widget.phoneNumber);
+    }
+    // อัปเดต index ของ bottom nav เมื่อสลับระหว่าง admin/user
+    if (oldWidget.isAdmin != widget.isAdmin) {
+      setState(() => _selectedIndex = widget.isAdmin ? 5 : 4);
     }
     if (!oldWidget.showSavedToast && widget.showSavedToast) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -186,7 +200,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   onTap: widget.onLeaveRoom,
                                 ),
                               ]
-                            : [
+                            : widget.hasRoom
+                            ? [
                                 _MenuItem(
                                   svgIcon: 'assets/images/icon_note_done.svg',
                                   label: 'ข้อมูลการเช่า',
@@ -198,6 +213,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   label: 'สมาชิกในห้อง',
                                   showArrow: true,
                                   onTap: widget.onNavigateToRoomMembers,
+                                ),
+                              ]
+                            : [
+                                _MenuItem(
+                                  icon: Icons.meeting_room_outlined,
+                                  label: 'เข้าร่วมห้องพัก',
+                                  showArrow: true,
+                                  onTap: widget.onNavigateToParticipate,
                                 ),
                               ],
                       ),
@@ -383,10 +406,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           if (!widget.isAdmin) ...[
             const SizedBox(height: 2),
-            const Text(
-              'ห้อง A301',
-              style: TextStyle(
-                fontFamily: 'Prompt',
+            if (!widget.isAdmin && widget.roomNumber.isNotEmpty)
+              Text(
+                'ห้อง ${widget.roomNumber}',
+                style: const TextStyle(
+                  fontFamily: 'Prompt',
                 fontSize: 15,
                 color: Color(0xFF666666),
               ),
@@ -565,8 +589,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     const navWidth = 320.0;
     const itemCount = 6;
     const circleSize = 40.0;
+    const adminActiveIndex = 5; // profile = index 5 เสมอ
     final slot = navWidth / itemCount;
-    final indicatorLeft = slot * _selectedIndex + (slot - circleSize) / 2;
+    final indicatorLeft = slot * adminActiveIndex + (slot - circleSize) / 2;
 
     final svgPaths = <int, String>{
       0: 'assets/images/icon_home.svg',
@@ -613,18 +638,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             Row(
               children: List.generate(itemCount, (i) {
-                final isActive = i == _selectedIndex;
+                const adminActiveIndex = 5; // profile = index 5 เสมอ
+                final isActive = i == adminActiveIndex;
                 final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
                 return GestureDetector(
                   onTap: () {
-                    setState(() => _selectedIndex = i);
                     if (i == 0 && widget.onNavigateToDashboard != null) {
                       widget.onNavigateToDashboard!();
                     } else if (i == 1 && widget.onNavigateToTenant != null) {
                       widget.onNavigateToTenant!();
+                    } else if (i == 2 && widget.onNavigateToAdminBill != null) {
+                      widget.onNavigateToAdminBill!();
                     } else if (i == 3 && widget.onNavigateToReportRepair != null) {
                       widget.onNavigateToReportRepair!();
+                    } else if (i == 4 && widget.onNavigateToAdminAnnounce != null) {
+                      widget.onNavigateToAdminAnnounce!();
                     }
+                    // i == 5 คือหน้าปัจจุบัน (profile)
                   },
                   child: SizedBox(
                     width: slot,
