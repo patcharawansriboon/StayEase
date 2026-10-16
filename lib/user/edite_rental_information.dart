@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditeRentalInformationScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -64,6 +65,7 @@ class _EditeRentalInformationScreenState
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     if (!mounted) return;
 
     final titleController = TextEditingController();
@@ -122,12 +124,48 @@ class _EditeRentalInformationScreenState
       setState(() {
         _attachments.add({
           'file': File(picked.path),
+          'bytes': bytes,
+          'fileName': picked.name,
           'title': titleController.text.isNotEmpty
               ? titleController.text
               : picked.name,
+          'url': '', // ยังไม่อัปโหลด
         });
       });
     }
+  }
+
+  // อัปโหลดเอกสารที่ยังไม่มี url ขึ้น Supabase Storage
+  // คืนข้อความ "ชื่อ|url" บรรทัดละ 1 รายการ
+  Future<String> _uploadDocuments() async {
+    final db = Supabase.instance.client;
+    final uid = db.auth.currentUser?.id ?? 'anon';
+    final lines = <String>[];
+    for (final att in _attachments) {
+      final title = (att['title'] as String?) ?? 'เอกสาร';
+      var url = (att['url'] as String?) ?? '';
+      final bytes = att['bytes'];
+      // ถ้ายังไม่มี url และมีไฟล์ใหม่ → อัปโหลด
+      if (url.isEmpty && bytes != null) {
+        try {
+          final fileName = (att['fileName'] as String?) ?? 'doc.png';
+          final ext = fileName.contains('.') ? fileName.split('.').last : 'png';
+          final path =
+              'documents/${uid}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          await db.storage.from('dormitory-images').uploadBinary(
+                path,
+                bytes,
+                fileOptions: const FileOptions(upsert: true),
+              );
+          url = db.storage.from('dormitory-images').getPublicUrl(path);
+        } catch (e) {
+          // ignore: avoid_print
+          print('❌ upload document error: $e');
+        }
+      }
+      lines.add(url.isEmpty ? title : '$title|$url');
+    }
+    return lines.join('\n');
   }
 
   Widget _buildUploadButton() {
@@ -455,6 +493,19 @@ class _EditeRentalInformationScreenState
     }
     if ((info['emergencyPhone'] ?? '').isNotEmpty) {
       _emergencyPhoneController.text = info['emergencyPhone']!;
+    }
+    // โหลดเอกสารเดิม (รูปแบบ "ชื่อ|url" บรรทัดละ 1 รายการ)
+    final rawDocs = info['documents'] ?? '';
+    if (rawDocs.isNotEmpty) {
+      for (final line in rawDocs.split('\n')) {
+        if (line.trim().isEmpty) continue;
+        final parts = line.split('|');
+        _attachments.add({
+          'title': parts[0].trim(),
+          'url': parts.length > 1 ? parts[1].trim() : '',
+          // ไม่มี bytes = เป็นเอกสารเดิมที่อัปโหลดแล้ว
+        });
+      }
     }
     _idCardFocusNode.addListener(() {
       if (!_idCardFocusNode.hasFocus) {
@@ -850,8 +901,10 @@ class _EditeRentalInformationScreenState
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(context);
+                          // อัปโหลดเอกสารขึ้น Storage ก่อน แล้วได้ string "ชื่อ|url"
+                          final documents = await _uploadDocuments();
                           widget.onSave?.call({
                             'name': _nameController.text,
                             'idCard': _idCardController.text,
@@ -862,9 +915,7 @@ class _EditeRentalInformationScreenState
                             'emergencyContact':
                                 _emergencyContactController.text,
                             'emergencyPhone': _emergencyPhoneController.text,
-                            'documents': _attachments
-                                .map((a) => a['title'] as String)
-                                .join('\n'),
+                            'documents': documents,
                           });
                         },
                         style: ElevatedButton.styleFrom(

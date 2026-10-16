@@ -360,11 +360,71 @@ return Container(
     );
   }
 
+  // แสดงรูปเอกสารแบบเต็มจอ
+  void _previewDocument(String title, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text(
+                      'ไม่สามารถแสดงไฟล์นี้ได้',
+                      style:
+                          TextStyle(fontFamily: 'Prompt', color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDocumentSection() {
     final raw = widget.rentalInfo['documents'] ?? '';
+    // แต่ละบรรทัดรูปแบบ "ชื่อ|url"
     final documents = raw.isEmpty
-        ? <String>[]
-        : raw.split('\n').where((e) => e.trim().isNotEmpty).toList();
+        ? <Map<String, String>>[]
+        : raw.split('\n').where((e) => e.trim().isNotEmpty).map((line) {
+            final parts = line.split('|');
+            return {
+              'title': parts[0].trim(),
+              'url': parts.length > 1 ? parts[1].trim() : '',
+            };
+          }).toList();
 
 return Container(
        width: double.infinity,
@@ -433,8 +493,13 @@ return Container(
               ),
             )
           else
-            ...documents.map((title) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+            ...documents.map((doc) {
+              final title = doc['title'] ?? 'เอกสาร';
+              final url = doc['url'] ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: url.isEmpty ? null : () => _previewDocument(title, url),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 14),
@@ -451,6 +516,8 @@ return Container(
                         Expanded(
                           child: Text(
                             title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontFamily: 'Prompt',
                               fontSize: 14,
@@ -458,10 +525,15 @@ return Container(
                             ),
                           ),
                         ),
+                        if (url.isNotEmpty)
+                          const Icon(Icons.visibility_outlined,
+                              size: 18, color: Color(0xFF4F8FDB)),
                       ],
                     ),
                   ),
-                )),
+                ),
+              );
+            }),
         ],
       ),
     );

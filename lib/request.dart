@@ -26,6 +26,11 @@ class RequestScreenState extends State<RequestScreen> {
     _loadDormRequest();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   /// เรียกจากภายนอกเมื่อกลับมาที่หน้านี้ เพื่อดึงคำขอใหม่
   void refresh() {
     if (!mounted) return;
@@ -155,6 +160,7 @@ class RequestScreenState extends State<RequestScreen> {
       }
 
       if (!mounted) return;
+
       setState(() {
         _isLoading = false;
         _dormRequests = requests;

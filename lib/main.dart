@@ -51,7 +51,7 @@ import 'tenant.dart';
 import 'tenant_details.dart';
 import 'edite_tenant.dart';
 import 'edite_announce.dart';
-import 'edite_tenant_bill.dart';
+import 'build_tenant_bill.dart';
 import 'notification.dart';
 import 'request.dart';
 import 'dormitory_request.dart';
@@ -160,7 +160,7 @@ enum AppScreen {
   request,
   announceAdmin,
   editeAnnounce,
-  editeTenantBill,
+  buildTenantBill,
   tenantSignup,
   tenantDashboard,
 }
@@ -198,6 +198,7 @@ class _AppScreenManagerState extends State<AppScreenManager> {
   }
   AppScreen _previousScreen = AppScreen.homeUser; // หน้าก่อนหน้าสำหรับ back
   String _selectedAnnouncementImage = 'assets/images/announcement_1.png';
+  Map<String, String> _selectedAnnouncement = {}; // ประกาศที่เลือกดูรายละเอียด
   bool _isAdminAnnounceDetails = false; // true = เปิด details จากฝั่ง admin
   String? _dormitoryId; // admin's dormitory id
   final _requestKey = GlobalKey<RequestScreenState>();
@@ -213,6 +214,8 @@ class _AppScreenManagerState extends State<AppScreenManager> {
   Map<String, dynamic> _currentBill = {};
   Map<String, int> _dashboardStats = {};
   List<Map<String, String>> _tenantList = [];
+  List<Map<String, dynamic>> _bills = [];
+  Map<String, int> _billStats = {};
   Map<int, String> _tenantStatuses = {};
   Map<String, String> _selectedTenantData = {};
   String? _selectedMemberId;
@@ -248,6 +251,8 @@ class _AppScreenManagerState extends State<AppScreenManager> {
       mockService.getRepairRequests(dormitoryId: _dormitoryId),
       mockService.getTenantList(dormitoryId: _dormitoryId),
       mockService.getAnnouncements(dormitoryId: _dormitoryId),
+      mockService.getBills(dormitoryId: _dormitoryId),
+      mockService.getBillStats(dormitoryId: _dormitoryId),
     ]);
     if (!mounted) return;
     setState(() {
@@ -257,6 +262,8 @@ class _AppScreenManagerState extends State<AppScreenManager> {
       _repairRequests  = results[3] as List<Map<String, String>>;
       _tenantList      = results[4] as List<Map<String, String>>;
       _announcements   = results[5] as List<Map<String, String>>;
+      _bills           = results[6] as List<Map<String, dynamic>>;
+      _billStats       = results[7] as Map<String, int>;
     });
   }
 
@@ -658,12 +665,14 @@ class _AppScreenManagerState extends State<AppScreenManager> {
           ),
           ChatScreen(onBack: () => _navigateTo(AppScreen.homeUser)),
           AnnounceScreen(
+            key: ValueKey('announce_$_announceReloadSeq'),
             onNavigateToHome: () => _navigateTo(AppScreen.homeUser),
             onNavigateToRentalFee: () => _navigateTo(AppScreen.rentalFee),
             onNavigateToChat: () => _navigateTo(AppScreen.chat),
-            onNavigateToDetails: (imagePath) {
+            onNavigateToDetails: (item) {
               setState(() {
-                _selectedAnnouncementImage = imagePath;
+                _selectedAnnouncement = item;
+                _selectedAnnouncementImage = item['image'] ?? '';
                 _isAdminAnnounceDetails = false;
               });
               _navigateTo(AppScreen.announceDetails);
@@ -682,10 +691,26 @@ class _AppScreenManagerState extends State<AppScreenManager> {
                   _navigateTo(AppScreen.announce);
                 }
               },
-              imagePath: _selectedAnnouncementImage,
+              imagePath: _selectedAnnouncement['image'],
+              title: _selectedAnnouncement['title'] ?? '',
+              detail: _selectedAnnouncement['content'] ?? '',
+              date: _selectedAnnouncement['date'] ?? '',
               isAdmin: _isAdminAnnounceDetails,
-              onEdit: () {},
-              onDelete: () {},
+              announcementId: _selectedAnnouncement['id'] ?? '',
+              onEdit: () {
+                // Reload announcements after edit
+                setState(() => _announceReloadSeq++);
+              },
+              onDelete: () {
+                // Reload announcements after delete
+                setState(() => _announceReloadSeq++);
+                // Navigate back
+                if (_isAdminAnnounceDetails) {
+                  _navigateTo(AppScreen.announceAdmin);
+                } else {
+                  _navigateTo(AppScreen.announce);
+                }
+              },
             ),
           ),
           ProfileScreen(
@@ -809,6 +834,7 @@ class _AppScreenManagerState extends State<AppScreenManager> {
                 address: data['address'] ?? '',
                 emergencyContact: data['emergencyContact'] ?? '',
                 emergencyPhone: data['emergencyPhone'] ?? '',
+                documents: data['documents'],
               );
 
               setState(() {
@@ -885,15 +911,17 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             onBack: () => _navigateTo(AppScreen.profile),
             onCloseAccount: () => _navigateTo(AppScreen.deletionFailed),
           ),
-          Builder(
+Builder(
             builder: (_) => ApplicationProcessScreen(
             onBack: () async {
               await _loadRentalInfo();
               _navigateTo(AppScreen.profile);
             },
-              onSubmit: () => _navigateTo(AppScreen.pendingRoomTransfer),
-              userName: _userName,
-              userPhone: _userPhoneNumber,
+            onSubmit: () {
+              _navigateTo(AppScreen.pendingRoomTransfer);
+            },
+            userName: _userName,
+            userPhone: _userPhoneNumber,
             ),
           ),
           PendingRoomTransferScreen(
@@ -1030,7 +1058,7 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
             onNavigateToAnnouncement: () => _navigateTo(AppScreen.announceAdmin),
             onNavigateToProfile: () => _navigateTo(AppScreen.profile),
-            onCreateBill: () => _navigateTo(AppScreen.editeTenantBill),
+            onCreateBill: () => _navigateTo(AppScreen.buildTenantBill),
             onTapBill: (bill) {
               setState(() {
                 _selectedBill = bill;
@@ -1042,6 +1070,8 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             },
             tenants: _tenantList,
             currentBill: _currentBill,
+            bills: _bills,
+            billStats: _billStats,
           ),
           RequestScreen(
             key: _requestKey,
@@ -1059,9 +1089,10 @@ class _AppScreenManagerState extends State<AppScreenManager> {
             onNavigateToRentalFee: () => _navigateTo(AppScreen.tenantBill),
             onNavigateToReportRepair: () => _navigateTo(AppScreen.reportRepair),
             onNavigateToChat: () => _navigateTo(AppScreen.chatAdmin),
-            onNavigateToDetails: (imagePath) {
+            onNavigateToDetails: (item) {
               setState(() {
-                _selectedAnnouncementImage = imagePath;
+                _selectedAnnouncement = item;
+                _selectedAnnouncementImage = item['image'] ?? '';
                 _isAdminAnnounceDetails = true;
               });
               _navigateTo(AppScreen.announceDetails);
@@ -1078,11 +1109,21 @@ class _AppScreenManagerState extends State<AppScreenManager> {
               _navigateTo(AppScreen.announceAdmin);
             },
           ),
-          // editeTenantBill
-          EditeTenantBillScreen(
+          // buildTenantBill
+          BuildTenantBillScreen(
             onBack: () => _navigateTo(AppScreen.tenantBill),
-            onSave: () => _navigateTo(AppScreen.tenantBill),
-            onManualEntry: () => _navigateTo(AppScreen.tenantBill), // TODO: หน้ากรอกบิล
+            onSave: () async {
+              // รีโหลดบิลจริงหลังส่งบิลสำเร็จ แล้วกลับหน้ารายการบิล
+              final bills = await mockService.getBills(dormitoryId: _dormitoryId);
+              final stats =
+                  await mockService.getBillStats(dormitoryId: _dormitoryId);
+              if (!mounted) return;
+              setState(() {
+                _bills = bills;
+                _billStats = stats;
+              });
+              _navigateTo(AppScreen.tenantBill);
+            },
             initialData: _selectedTenantData.isNotEmpty ? _selectedTenantData : null,
           ),
           // ── Tenant Google Sign Up (index 53) ──

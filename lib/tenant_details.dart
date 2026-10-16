@@ -56,10 +56,23 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
     }
     setState(() => _loading = true);
     try {
+      // แปลง memberId (dormitory_members.id) → user_id ก่อน
+      // เพราะ tenant_rentals ใช้ member_id = auth user id
+      final memberRow = await Supabase.instance.client
+          .from('dormitory_members')
+          .select('user_id')
+          .eq('id', widget.memberId!)
+          .maybeSingle();
+      final authUserId = memberRow?['user_id']?.toString();
+      if (authUserId == null || authUserId.isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
       final data = await Supabase.instance.client
           .from('tenant_rentals')
           .select()
-          .eq('member_id', widget.memberId!)
+          .eq('member_id', authUserId)
           .maybeSingle();
       if (data != null && mounted) {
         setState(() {
@@ -378,6 +391,18 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
   }
 
   Widget _buildDocumentSection() {
+    // เอกสารจริง (รูปแบบ "ชื่อ|url" ต่อบรรทัด) จาก tenant_rentals
+    final raw = _rentalInfo?['documents']?.toString() ?? '';
+    final documents = raw.isEmpty
+        ? <Map<String, String>>[]
+        : raw.split('\n').where((e) => e.trim().isNotEmpty).map((line) {
+            final parts = line.split('|');
+            return {
+              'title': parts[0].trim(),
+              'url': parts.length > 1 ? parts[1].trim() : '',
+            };
+          }).toList();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -399,36 +424,113 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildDocRow('สำเนาบัตรประชาชน'),
-          const SizedBox(height: 10),
-          _buildDocRow('สัญญาเช่า'),
+          if (documents.isEmpty)
+            const Text(
+              'ยังไม่มีเอกสารแนบ',
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 13,
+                color: Color(0xFF999999),
+              ),
+            )
+          else
+            for (int i = 0; i < documents.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _buildDocRow(
+                documents[i]['title'] ?? 'เอกสาร',
+                documents[i]['url'] ?? '',
+              ),
+            ],
         ],
       ),
     );
   }
 
-  Widget _buildDocRow(String title) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Row(
-        children: [
-          SvgPicture.asset('assets/images/icon_document.svg',
-              width: 24, height: 24),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Prompt',
-              fontSize: 14,
-              color: Color(0xFF000000),
+  Widget _buildDocRow(String title, String url) {
+    return GestureDetector(
+      onTap: url.isEmpty ? null : () => _previewDocument(title, url),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE0E0E0)),
+        ),
+        child: Row(
+          children: [
+            SvgPicture.asset('assets/images/icon_document.svg',
+                width: 24, height: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 14,
+                  color: Color(0xFF000000),
+                ),
+              ),
             ),
-          ),
-        ],
+            if (url.isNotEmpty)
+              const Icon(Icons.visibility_outlined,
+                  size: 18, color: Color(0xFF4F8FDB)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // แสดงรูปเอกสารแบบเต็มจอ
+  void _previewDocument(String title, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text(
+                      'ไม่สามารถแสดงไฟล์นี้ได้',
+                      style:
+                          TextStyle(fontFamily: 'Prompt', color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

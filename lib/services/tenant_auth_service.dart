@@ -352,10 +352,11 @@ class TenantAuthService {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return null;
 
-      // ดึงจาก tenant_rentals ก่อน (ข้อมูลที่ admin กรอกเพิ่มเติม)
+      // ดึงจาก tenant_rentals ก่อน (admin กรอกข้อมูลการเช่า + ผู้เช่ากรอกข้อมูลส่วนตัว)
       final rentalRow = await _db
           .from('tenant_rentals')
-          .select('building, room_number, floor, check_in_date, check_out_date, rent, deposit')
+          .select(
+              'building, room_number, floor, check_in_date, check_out_date, rent, deposit, id_card, birthdate, gender, address, emergency_contact, emergency_phone, documents')
           .eq('member_id', uid)
           .maybeSingle();
 
@@ -385,6 +386,14 @@ class TenantAuthService {
         'check_out': rentalRow?['check_out_date']?.toString() ?? '',
         'rent':      rentalRow?['rent']?.toString() ?? '',
         'deposit':   rentalRow?['deposit']?.toString() ?? '',
+        // ข้อมูลส่วนตัว/ติดต่อ/เอกสาร (ผู้เช่ากรอกเอง)
+        'idCard':           rentalRow?['id_card']?.toString() ?? '',
+        'birthdate':        rentalRow?['birthdate']?.toString() ?? '',
+        'gender':           rentalRow?['gender']?.toString() ?? '',
+        'address':          rentalRow?['address']?.toString() ?? '',
+        'emergencyContact': rentalRow?['emergency_contact']?.toString() ?? '',
+        'emergencyPhone':   rentalRow?['emergency_phone']?.toString() ?? '',
+        'documents':        rentalRow?['documents']?.toString() ?? '',
       };
     } catch (e) {
       print('❌ getTenantRentalInfo error: $e');
@@ -402,12 +411,13 @@ class TenantAuthService {
     required String address,
     required String emergencyContact,
     required String emergencyPhone,
+    String? documents,
   }) async {
     try {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return false;
 
-      await _db.from('tenant_rentals').upsert({
+      final data = {
         'member_id': uid,
         'id_card': idCard,
         'birthdate': birthdate,
@@ -416,7 +426,10 @@ class TenantAuthService {
         'emergency_contact': emergencyContact,
         'emergency_phone': emergencyPhone,
         'updated_at': DateTime.now().toIso8601String(),
-      });
+      };
+      if (documents != null) data['documents'] = documents;
+
+      await _db.from('tenant_rentals').upsert(data);
 
       return true;
     } catch (e) {
@@ -491,6 +504,45 @@ class TenantAuthService {
       return true;
     } catch (e) {
       print('❌ saveAnnouncement error: $e');
+      return false;
+    }
+  }
+
+  // ── 17. ลบประกาศ ─────────────────────────────────────────────────────────
+  /// ลบประกาศจากฐานข้อมูล
+  Future<bool> deleteAnnouncement(String announcementId) async {
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) return false;
+
+      // ตรวจสอบว่าเป็นเจ้าของประกาศหรือเป็นแอดมินของหอพัก
+      final announcement = await _db
+          .from('announcements')
+          .select('dormitory_id, created_by')
+          .eq('id', announcementId)
+          .maybeSingle();
+
+      if (announcement == null) return false;
+
+      final dormitoryId = announcement['dormitory_id'] as String;
+      final createdBy = announcement['created_by'] as String;
+
+      // ตรวจสอบว่าเป็นผู้สร้างประกาศหรือแอดมินของหอพัก
+      final dorm = await _db
+          .from('dormitories')
+          .select('created_by')
+          .eq('id', dormitoryId)
+          .maybeSingle();
+
+      final isAdmin = dorm?['created_by'] == uid;
+      final isOwner = createdBy == uid;
+
+      if (!isAdmin && !isOwner) return false;
+
+      await _db.from('announcements').delete().eq('id', announcementId);
+      return true;
+    } catch (e) {
+      print('❌ deleteAnnouncement error: $e');
       return false;
     }
   }

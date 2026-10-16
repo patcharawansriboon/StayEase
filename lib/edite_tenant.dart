@@ -37,12 +37,97 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
 
   String _status = 'กำลังเช่า';
 
+  // auth user id ของผู้เช่า (แปลงจาก memberId = dormitory_members.id)
+  String? _tenantUserId;
+
+  // ข้อมูลส่วนตัว (ผู้เช่ากรอก) — readonly ฝั่งแอดมิน
+  String _pName = '';
+  String _pPhone = '';
+  String _pIdCard = '';
+  String _pBirthdate = '';
+  String _pGender = '';
+  // เอกสารแนบ (ชื่อไฟล์ + url) ที่ผู้เช่าอัปโหลด
+  List<Map<String, String>> _documents = [];
+
   @override
   void initState() {
     super.initState();
     if (widget.currentStatus != null) {
       _status = widget.currentStatus!;
     }
+    _loadExistingRental();
+  }
+
+  // แปลง memberId → user_id แล้วดึงข้อมูลการเช่าเดิมมาเติมในฟอร์ม
+  Future<void> _loadExistingRental() async {
+    if (widget.memberId == null) return;
+    final db = Supabase.instance.client;
+    try {
+      // 1) memberId (dormitory_members.id) → user_id (auth)
+      final memberRow = await db
+          .from('dormitory_members')
+          .select('user_id')
+          .eq('id', widget.memberId!)
+          .maybeSingle();
+      final userId = memberRow?['user_id']?.toString();
+      if (userId == null || userId.isEmpty) return;
+      _tenantUserId = userId;
+
+      // 2) ดึงข้อมูลการเช่า + ข้อมูลส่วนตัว + เอกสาร จาก tenant_rentals
+      final rental = await db
+          .from('tenant_rentals')
+          .select(
+              'building, room_number, floor, check_in_date, check_out_date, rent, deposit, id_card, birthdate, gender, address, emergency_contact, emergency_phone, documents')
+          .eq('member_id', userId)
+          .maybeSingle();
+
+      // 3) ชื่อ-นามสกุล + เบอร์ จากตาราง tenants
+      final tenant = await db
+          .from('tenants')
+          .select('full_name, phone')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (!mounted) return;
+      setState(() {
+        if (rental != null) {
+          _buildingController.text = rental['building']?.toString() ?? '';
+          _roomController.text = rental['room_number']?.toString() ?? '';
+          _floorController.text = rental['floor']?.toString() ?? '';
+          _checkInController.text =
+              rental['check_in_date']?.toString() ?? '';
+          _checkOutController.text =
+              rental['check_out_date']?.toString() ?? '';
+          _rentController.text = rental['rent']?.toString() ?? '';
+          _depositController.text = rental['deposit']?.toString() ?? '';
+
+          _pIdCard = rental['id_card']?.toString() ?? '';
+          _pBirthdate = rental['birthdate']?.toString() ?? '';
+          _pGender = rental['gender']?.toString() ?? '';
+          _documents = _parseDocuments(rental['documents']?.toString() ?? '');
+        }
+        _pName = tenant?['full_name']?.toString() ?? '';
+        _pPhone = tenant?['phone']?.toString() ?? '';
+      });
+    } catch (e) {
+      print('❌ _loadExistingRental error: $e');
+    }
+  }
+
+  // แปลงข้อความเอกสาร "ชื่อ|url" บรรทัดละ 1 รายการ → list
+  List<Map<String, String>> _parseDocuments(String raw) {
+    if (raw.trim().isEmpty) return [];
+    return raw
+        .split('\n')
+        .where((e) => e.trim().isNotEmpty)
+        .map((line) {
+          final parts = line.split('|');
+          return {
+            'title': parts[0].trim(),
+            'url': parts.length > 1 ? parts[1].trim() : '',
+          };
+        })
+        .toList();
   }
 
   final List<String> _months = [
@@ -259,18 +344,19 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
     );
   }
 
-  // ---- ข้อมูลส่วนตัว (readonly เทา) ----
+  // ---- ข้อมูลส่วนตัว (readonly เทา) — ดึงจริงจากข้อมูลที่ผู้เช่ากรอก ----
   Widget _buildPersonalSection() {
+    String show(String v) => v.isNotEmpty ? v : '-';
     return _buildCard(
       title: 'ข้อมูลส่วนตัว',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildReadOnlyField('ชื่อ-นามสกุล', 'พัชราวรรณ  ศรีบุญ'),
-          _buildReadOnlyField('เบอร์มือถือ', '098-9890000'),
-          _buildReadOnlyField('เลขบัตรประชาชน', '1-2-009-00000-000'),
-          _buildReadOnlyField('วันเกิด', '26 กันยายน 2547'),
-          _buildReadOnlyField('เพศ', 'หญิง'),
+          _buildReadOnlyField('ชื่อ-นามสกุล', show(_pName)),
+          _buildReadOnlyField('เบอร์มือถือ', show(_pPhone)),
+          _buildReadOnlyField('เลขบัตรประชาชน', show(_pIdCard)),
+          _buildReadOnlyField('วันเกิด', show(_pBirthdate)),
+          _buildReadOnlyField('เพศ', show(_pGender)),
         ],
       ),
     );
@@ -392,43 +478,121 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
     );
   }
 
-  // ---- เอกสารแนบ ----
+  // ---- เอกสารแนบ (แสดงจริงจากที่ผู้เช่าอัปโหลด) ----
   Widget _buildDocumentSection() {
     return _buildCard(
       title: 'เอกสารแนบ',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildDocRow('สำเนาบัตรประชาชน'),
-          const SizedBox(height: 10),
-          _buildDocRow('สัญญาเช่า'),
-        ],
+      child: _documents.isEmpty
+          ? const Text(
+              'ยังไม่มีเอกสารแนบ',
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 13,
+                color: Color(0xFF999999),
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (int i = 0; i < _documents.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 10),
+                  _buildDocRow(
+                    _documents[i]['title'] ?? 'เอกสาร',
+                    _documents[i]['url'] ?? '',
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+
+  Widget _buildDocRow(String title, String url) {
+    return GestureDetector(
+      onTap: url.isEmpty ? null : () => _previewDocument(title, url),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE0E0E0)),
+        ),
+        child: Row(
+          children: [
+            SvgPicture.asset('assets/images/icon_document.svg',
+                width: 24, height: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Prompt',
+                  fontSize: 14,
+                  color: Color(0xFF000000),
+                ),
+              ),
+            ),
+            if (url.isNotEmpty)
+              const Icon(Icons.visibility_outlined,
+                  size: 18, color: Color(0xFF4F8FDB)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDocRow(String title) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Row(
-        children: [
-          SvgPicture.asset('assets/images/icon_document.svg',
-              width: 24, height: 24),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Prompt',
-              fontSize: 14,
-              color: Color(0xFF000000),
+  // แสดงรูปเอกสารแบบเต็มจอ
+  void _previewDocument(String title, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Flexible(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text(
+                      'ไม่สามารถแสดงไฟล์นี้ได้',
+                      style: TextStyle(
+                        fontFamily: 'Prompt',
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -603,11 +767,23 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   }
 
   Future<void> _saveRentalInfo() async {
-    if (widget.memberId == null) return;
     final db = Supabase.instance.client;
+    // ใช้ user_id เป็น member_id (มาตรฐานเดียวกับฝั่งผู้เช่า)
+    // ถ้ายังไม่มี _tenantUserId ให้แปลงจาก memberId ก่อน
+    var userId = _tenantUserId;
+    if (userId == null && widget.memberId != null) {
+      final memberRow = await db
+          .from('dormitory_members')
+          .select('user_id')
+          .eq('id', widget.memberId!)
+          .maybeSingle();
+      userId = memberRow?['user_id']?.toString();
+    }
+    if (userId == null || userId.isEmpty) return;
+
     try {
       await db.from('tenant_rentals').upsert({
-        'member_id': widget.memberId,
+        'member_id': userId,
         'building': _buildingController.text,
         'room_number': _roomController.text,
         'floor': _floorController.text,

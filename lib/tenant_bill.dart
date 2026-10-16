@@ -13,6 +13,12 @@ class TenantBillScreen extends StatefulWidget {
   final List<Map<String, String>> tenants;
   final Map<String, dynamic> currentBill;
 
+  /// บิลจริงจาก Supabase (ถ้ามี) — ถ้าว่างจะใช้ข้อมูลจำลองเดิม
+  final List<Map<String, dynamic>> bills;
+
+  /// สรุปจำนวนบิลตามสถานะ {pending, review, paid}
+  final Map<String, int> billStats;
+
   const TenantBillScreen({
     super.key,
     this.onBack,
@@ -25,6 +31,8 @@ class TenantBillScreen extends StatefulWidget {
     this.onTapBill,
     this.tenants = const [],
     this.currentBill = const {},
+    this.bills = const [],
+    this.billStats = const {},
   });
 
   @override
@@ -145,12 +153,25 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   Widget _buildSummary() {
+    // ใช้สถิติจริงถ้ามี ไม่งั้นนับจากรายการบิลที่แสดงอยู่
+    final stats = widget.billStats;
+    int pending = stats['pending'] ?? 0;
+    int review = stats['review'] ?? 0;
+    int paid = stats['paid'] ?? 0;
+
+    if (stats.isEmpty) {
+      final bills = _buildBills();
+      pending = bills.where((b) => b['status'] == 'pending').length;
+      review = bills.where((b) => b['status'] == 'review').length;
+      paid = bills.where((b) => b['status'] == 'paid').length;
+    }
+
     return Row(
       children: [
         Expanded(
           child: _buildSummaryCard(
             title: 'รอชำระ',
-            value: '12',
+            value: '$pending',
             color: const Color(0xFFE05C5C),
             background: const Color(0xFFFCE9E9),
           ),
@@ -159,7 +180,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         Expanded(
           child: _buildSummaryCard(
             title: 'รอตรวจสอบ',
-            value: '3',
+            value: '$review',
             color: const Color(0xFFE6A700),
             background: const Color(0xFFFFF8E5),
           ),
@@ -168,7 +189,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         Expanded(
           child: _buildSummaryCard(
             title: 'ชำระแล้ว',
-            value: '45',
+            value: '$paid',
             color: const Color(0xFF4CAF50),
             background: const Color(0xFFE9F7EC),
           ),
@@ -620,6 +641,12 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   List<Map<String, dynamic>> _buildBills() {
+    // ใช้บิลจริงจาก Supabase ถ้ามี
+    if (widget.bills.isNotEmpty) {
+      return widget.bills;
+    }
+
+    // ไม่มีบิลจริง → ข้อมูลจำลอง (fallback)
     final bill = widget.currentBill;
     final tenantList = widget.tenants.isNotEmpty
         ? widget.tenants

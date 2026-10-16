@@ -212,6 +212,18 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
       } catch (e) {
         print('❌ submit request error: $e');
       }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'ส่งคำขอเรียบร้อย รอการอนุมัติจากแอดมิน',
+              style: TextStyle(fontFamily: 'Prompt'),
+            ),
+            backgroundColor: Color(0xFF4F8FDB),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
       widget.onSubmit?.call();
     }
   }

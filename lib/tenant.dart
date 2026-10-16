@@ -50,7 +50,7 @@ class _TenantScreenState extends State<TenantScreen> {
     if (rows.isNotEmpty) {
       _tenants = rows.map((r) => {
         'name': r['name']?.toString() ?? '',
-        'room': r['room_number']?.toString() ?? r['room']?.toString() ?? '',
+        'room': r['room']?.toString() ?? '',
         'role': r['role']?.toString() ?? '',
         'phone': r['phone']?.toString() ?? '',
         'status': r['status']?.toString() ?? '',
@@ -65,11 +65,7 @@ class _TenantScreenState extends State<TenantScreen> {
     } else {
       _tenants = widget.tenants.isNotEmpty
           ? widget.tenants
-          : [
-              {'name': 'พัชราวรรณ  ศรีบุญ', 'room': 'A303', 'role': 'ผู้เช่าหลัก', 'phone': '099-999999', 'status': 'กำลังเช่า', 'member_id': 'member_1'},
-              {'name': 'สมชาย  ใจดี', 'room': 'A303', 'role': 'Roommate', 'phone': '088-888888', 'status': 'กำลังเช่า', 'member_id': 'member_2'},
-              {'name': 'วิภา  รักเรียน', 'room': 'C101', 'role': 'ผู้เช่าหลัก', 'phone': '077-777777', 'status': 'ว่าง/รอ', 'member_id': 'member_3'},
-            ];
+          : [];
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -210,6 +206,10 @@ class _TenantScreenState extends State<TenantScreen> {
   }
 
   Widget _buildStatBar() {
+    final countTotal = _tenants.length;
+    final countActive = _tenants.where((t) => t['status'] == 'กำลังเช่า').length;
+    final countEmpty = _tenants.where((t) => t['status'] != 'กำลังเช่า').length;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -223,7 +223,7 @@ class _TenantScreenState extends State<TenantScreen> {
               bg: const Color(0xFFEAF2FB),
               icon: Icons.people,
               iconColor: const Color(0xFF4181CB),
-              number: '50',
+              number: countTotal.toString(),
               label: 'ผู้เช่าทั้งหมด',
             ),
           ),
@@ -232,7 +232,7 @@ class _TenantScreenState extends State<TenantScreen> {
               bg: const Color(0xFFE9F7EC),
               icon: Icons.people,
               iconColor: const Color(0xFF4CAF50),
-              number: '48',
+              number: countActive.toString(),
               label: 'กำลังเช่า',
             ),
           ),
@@ -241,8 +241,8 @@ class _TenantScreenState extends State<TenantScreen> {
               bg: const Color(0xFFF2F2F2),
               icon: Icons.person_outline,
               iconColor: const Color(0xFF999999),
-              number: '2',
-              label: 'ว่าง/รอ',
+              number: countEmpty.toString(),
+              label: 'อื่นๆ',
               trailingChevron: true,
             ),
           ),

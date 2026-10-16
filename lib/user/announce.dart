@@ -6,7 +6,7 @@ class AnnounceScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHome;
   final VoidCallback? onNavigateToRentalFee;
   final VoidCallback? onNavigateToChat;
-  final ValueChanged<String>? onNavigateToDetails;
+  final ValueChanged<Map<String, String>>? onNavigateToDetails;
   final VoidCallback? onNavigateToProfile;
   final List<Map<String, String>> announcements;
   final bool isAdmin;
@@ -83,7 +83,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
 
   List<Map<String, String>> get _displayAnnouncements => _announcements;
 
-  String get _detailButtonText => 'รายละเอียด';  @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -120,43 +120,67 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
     );
   }
 
-  // ---- Header ----
+  // ---- Header (แอดมินและผู้เช่าใช้รูปแบบเดียวกัน แต่แอดมินมีปุ่มเพิ่มประกาศ) ----
   Widget _buildHeader() {
-    if (widget.isAdmin) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 60, 16, 12),
-        child: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'ประกาศ',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF000000),
-                ),
-              ),
-            ),
-            // ปุ่มเพิ่มประกาศ
+    final titleColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        Text(
+          'ประกาศ',
+          style: TextStyle(
+            fontFamily: 'Prompt',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
+        SizedBox(height: 2),
+        Text(
+          'ข่าวสารและข้อมูลสำคัญจากหอพัก',
+          style: TextStyle(
+            fontFamily: 'Prompt',
+            fontSize: 13,
+            color: Color(0xFF888888),
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SvgPicture.asset(
+            'assets/images/megaphone.svg',
+            width: 40,
+            height: 40,
+            placeholderBuilder: (_) => const Icon(Icons.campaign,
+                size: 36, color: Color(0xFF4F8FDB)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: titleColumn),
+          // ปุ่มเพิ่มประกาศอยู่ที่เดิม (มุมขวาของส่วนหัว)
+          if (widget.isAdmin)
             GestureDetector(
               onTap: widget.onAddAnnouncement,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF4F8FDB),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add, size: 16, color: Colors.white),
+                    Icon(Icons.add, size: 14, color: Colors.white),
                     SizedBox(width: 4),
                     Text(
-                      'เพิ่มประกาศ',
+                      'ประกาศ',
                       style: TextStyle(
                         fontFamily: 'Prompt',
-                        fontSize: 13,
+                        fontSize: 12,
                         color: Colors.white,
                       ),
                     ),
@@ -164,22 +188,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
                 ),
               ),
             ),
-          ],
-        ),
-      );
-    }
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 60, 16, 12),
-      child: Center(
-        child: Text(
-          'ประกาศ',
-          style: TextStyle(
-            fontFamily: 'Prompt',
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-            color: Color(0xFF000000),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -264,109 +273,97 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
     );
   }
 
-  Widget _imageError() => Container(
-        width: double.infinity,
-        height: 160,
-        color: const Color(0xFFF5F5F5),
-        child: const Center(
-          child: Icon(Icons.image_outlined, size: 48, color: Color(0xFFCCCCCC)),
-        ),
-      );
-
   // ---- Announcement Card ----
   Widget _buildAnnouncementCard(Map<String, String> item) {
-    final imagePath = item['image'] ?? '';
-    final title     = item['title'] ?? '';
-    final content   = item['content'] ?? '';
-    final date      = item['date'] ?? '';
+    // แอดมินและผู้เช่าใช้การ์ดเดียวกัน (พื้นเหลือง)
+    return _buildTenantCard(item);
+  }
+
+  // ---- การ์ดผู้เช่า: พื้นเหลือง + title + วันที่ + รูป + ลูกศร ----
+  Widget _buildTenantCard(Map<String, String> item) {
+    final title = item['title'] ?? '';
+    final date  = item['date'] ?? '';
 
     return GestureDetector(
-      onTap: () => widget.onNavigateToDetails?.call(imagePath),
+      onTap: () => widget.onNavigateToDetails?.call(item),
       child: Container(
         width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+          color: const Color(0xFFFFF4D6), // พื้นเหลืองอ่อน
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFCE9A8)),
+        ),
+        child: Row(
+          children: [
+            // ซ้าย: title + วันที่
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.isNotEmpty ? title : 'ประกาศ',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Prompt',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 15, color: Color(0xFF888888)),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          date,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Prompt',
+                            fontSize: 13,
+                            color: Color(0xFF555555),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // กลาง: รูป proclaim (ไม่มีกรอบ)
+            Image.asset(
+              'assets/images/proclaim.png',
+              width: 70,
+              height: 70,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(Icons.campaign,
+                  size: 60, color: Color(0xFFE6A700)),
+            ),
+            const SizedBox(width: 8),
+            // ขวา: ปุ่มลูกศร
+            Container(
+              width: 28,
+              height: 28,
+              decoration: const BoxDecoration(
+                color: Color(0xFFBFD9F2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.chevron_right,
+                  size: 18, color: Color(0xFF4F8FDB)),
             ),
           ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // รูปภาพ (ถ้ามี)
-              if (imagePath.isNotEmpty)
-                imagePath.startsWith('http')
-                    ? Image.network(
-                        imagePath,
-                        width: double.infinity,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                      )
-                    : Image.asset(
-                        imagePath,
-                        width: double.infinity,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                      ),
-              // title + content + วันที่
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (title.isNotEmpty)
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A1A2E),
-                        ),
-                      ),
-                    if (content.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        content,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 13,
-                          color: Color(0xFF666666),
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                    if (date.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        date,
-                        style: const TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 11,
-                          color: Color(0xFFAAAAAA),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
+
+
 
   // ---- Bottom Navigation ----
   Widget _buildBottomNav() {
