@@ -11,6 +11,7 @@ class RentalFeeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToAnnounce;
   final VoidCallback? onNavigateToProfile;
   final Map<String, dynamic> currentBill;
+  final bool hasRoom;
 
   const RentalFeeScreen({
     super.key,
@@ -23,6 +24,7 @@ class RentalFeeScreen extends StatefulWidget {
     this.onNavigateToAnnounce,
     this.onNavigateToProfile,
     this.currentBill = const {},
+    this.hasRoom = true,
   });
 
   @override
@@ -58,15 +60,17 @@ return Scaffold(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Column(
-                  children: [
-                    _buildRentCard(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
+              child: widget.hasRoom
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Column(
+                        children: [
+                          _buildRentCard(),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    )
+                  : _buildNoRoomEmptyState(),
             ),
             _buildBottomNav(),
           ],
@@ -131,6 +135,51 @@ return Scaffold(
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---- Empty state เมื่อยังไม่ได้เข้าร่วมหอพัก ----
+  Widget _buildNoRoomEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEAF2FB),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.receipt_long_outlined,
+                  size: 48, color: Color(0xFF4F8FDB)),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'ยังไม่มีบิล',
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'คุณยังไม่ได้เข้าร่วมห้องพักใด\nจึงยังไม่มีบิลค่าเช่า',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 14,
+                color: Colors.black.withValues(alpha: 0.45),
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

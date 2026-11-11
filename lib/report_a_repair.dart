@@ -6,6 +6,8 @@ class ReportARepairScreen extends StatefulWidget {
   final VoidCallback? onNavigateToTenant;
   final VoidCallback? onNavigateToChatAdmin;
   final VoidCallback? onNavigateToProfile;
+  final VoidCallback? onNavigateToBill;
+  final VoidCallback? onNavigateToAnnounce;
 
   const ReportARepairScreen({
     super.key,
@@ -13,6 +15,8 @@ class ReportARepairScreen extends StatefulWidget {
     this.onNavigateToTenant,
     this.onNavigateToChatAdmin,
     this.onNavigateToProfile,
+    this.onNavigateToBill,
+    this.onNavigateToAnnounce,
   });
 
   @override
@@ -20,7 +24,6 @@ class ReportARepairScreen extends StatefulWidget {
 }
 
 class _ReportARepairScreenState extends State<ReportARepairScreen> {
-  int _selectedIndex = 3;
   final _searchController = TextEditingController();
 
   final List<Map<String, dynamic>> _repairs = [
@@ -252,8 +255,9 @@ class _ReportARepairScreenState extends State<ReportARepairScreen> {
     const navWidth = 320.0;
     const itemCount = 6;
     const circleSize = 40.0;
+    const activeIndex = 3; // report repair = index 3 เสมอ
     final slot = navWidth / itemCount;
-    final indicatorLeft = slot * _selectedIndex + (slot - circleSize) / 2;
+    final indicatorLeft = slot * activeIndex + (slot - circleSize) / 2;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -306,18 +310,20 @@ class _ReportARepairScreenState extends State<ReportARepairScreen> {
       3: Icons.build_outlined,
     };
 
+    const activeIndex = 3; // report repair = index 3 เสมอ
     return List.generate(6, (i) {
-      final isActive = i == _selectedIndex;
+      final isActive = i == activeIndex;
       final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
       return GestureDetector(
         onTap: () {
-          setState(() => _selectedIndex = i);
           if (i == 0 && widget.onNavigateToDashboard != null) {
             widget.onNavigateToDashboard!();
           } else if (i == 1 && widget.onNavigateToTenant != null) {
             widget.onNavigateToTenant!();
-          } else if (i == 4 && widget.onNavigateToChatAdmin != null) {
-            widget.onNavigateToChatAdmin!();
+          } else if (i == 2 && widget.onNavigateToBill != null) {
+            widget.onNavigateToBill!();
+          } else if (i == 4 && widget.onNavigateToAnnounce != null) {
+            widget.onNavigateToAnnounce!();
           } else if (i == 5 && widget.onNavigateToProfile != null) {
             widget.onNavigateToProfile!();
           }

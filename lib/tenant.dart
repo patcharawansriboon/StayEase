@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'services/tenant_auth_service.dart';
 
 class TenantScreen extends StatefulWidget {
   final VoidCallback? onNavigateToDashboard;
@@ -7,6 +8,10 @@ class TenantScreen extends StatefulWidget {
   final VoidCallback? onNavigateToEditeTenant;
   final VoidCallback? onNavigateToReportRepair;
   final VoidCallback? onNavigateToProfile;
+  final VoidCallback? onNavigateToBill;
+  final VoidCallback? onNavigateToAnnounce;
+  final void Function(int index)? selectedTenantIndex;
+  final VoidCallback? onTenantSelected;
   final List<Map<String, String>> tenants;
 
   const TenantScreen({
@@ -16,6 +21,10 @@ class TenantScreen extends StatefulWidget {
     this.onNavigateToEditeTenant,
     this.onNavigateToReportRepair,
     this.onNavigateToProfile,
+    this.onNavigateToBill,
+    this.onNavigateToAnnounce,
+    this.selectedTenantIndex,
+    this.onTenantSelected,
     this.tenants = const [],
   });
 
@@ -24,21 +33,49 @@ class TenantScreen extends StatefulWidget {
 }
 
 class _TenantScreenState extends State<TenantScreen> {
-  int _selectedIndex = 1;
   final _searchController = TextEditingController();
   String _filter = 'ทั้งหมด';
   List<Map<String, String>> _tenants = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _tenants = widget.tenants.isNotEmpty
-        ? widget.tenants
-        : [
-            {'name': 'พัชราวรรณ  ศรีบุญ', 'room': 'A303', 'role': 'ผู้เช่าหลัก', 'phone': '099-999999', 'status': 'กำลังเช่า'},
-            {'name': 'สมชาย  ใจดี', 'room': 'A303', 'role': 'Roommate', 'phone': '088-888888', 'status': 'กำลังเช่า'},
-            {'name': 'วิภา  รักเรียน', 'room': 'C101', 'role': 'ผู้เช่าหลัก', 'phone': '077-777777', 'status': 'ว่าง/รอ'},
-          ];
+    _loadTenants();
+  }
+
+  Future<void> _loadTenants() async {
+    final service = TenantAuthService();
+    final rows = await service.getDormitoryTenants();
+    if (rows.isNotEmpty) {
+      _tenants = rows.map((r) => {
+        'name': r['name']?.toString() ?? '',
+        'room': r['room']?.toString() ?? '',
+        'role': r['role']?.toString() ?? '',
+        'phone': r['phone']?.toString() ?? '',
+        'status': r['status']?.toString() ?? '',
+        'member_id': r['member_id']?.toString() ?? '',
+        'building': r['building']?.toString() ?? '',
+        'floor': r['floor']?.toString() ?? '',
+        'check_in': r['check_in']?.toString() ?? '',
+        'check_out': r['check_out']?.toString() ?? '',
+        'rent': r['rent']?.toString() ?? '',
+        'deposit': r['deposit']?.toString() ?? '',
+      }).toList();
+    } else {
+      _tenants = widget.tenants.isNotEmpty
+          ? widget.tenants
+          : [];
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  void didUpdateWidget(covariant TenantScreen old) {
+    super.didUpdateWidget(old);
+    if (widget.tenants.isNotEmpty) {
+      _tenants = widget.tenants;
+    }
   }
 
   @override
@@ -53,47 +90,52 @@ class _TenantScreenState extends State<TenantScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 60, 16, 100),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'ผู้เช่า',
-                  style: TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF4181CB),
+          if (!_loading)
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 60, 16, 100),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ผู้เช่า',
+                    style: TextStyle(
+                      fontFamily: 'Prompt',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF4181CB),
+                    ),
                   ),
-                ),
-                const Text(
-                  'จัดการข้อมูลผู้เช่าทั้งหมด',
-                  style: TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 13,
-                    color: Color(0xFF8AA0BE),
+                  const Text(
+                    'จัดการข้อมูลผู้เช่าทั้งหมด',
+                    style: TextStyle(
+                      fontFamily: 'Prompt',
+                      fontSize: 13,
+                      color: Color(0xFF8AA0BE),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                _buildSearchBar(),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _buildAddButton(),
-                ),
-                const SizedBox(height: 12),
-                _buildStatBar(),
-                const SizedBox(height: 12),
-                _buildFilters(),
-                const SizedBox(height: 12),
-                ..._tenants
-                    .where((t) =>
-                        _filter == 'ทั้งหมด' || t['status'] == _filter)
-                    .map(_buildTenantCard),
-              ],
+                  const SizedBox(height: 14),
+                  _buildSearchBar(),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildAddButton(),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildStatBar(),
+                  const SizedBox(height: 12),
+                  _buildFilters(),
+                  const SizedBox(height: 12),
+                  ..._tenants
+                      .where((t) =>
+                          _filter == 'ทั้งหมด' || t['status'] == _filter)
+                      .map(_buildTenantCard),
+                ],
+              ),
             ),
-          ),
+          if (_loading)
+            const Center(
+              child: CircularProgressIndicator(color: Color(0xFF4181CB)),
+            ),
           Align(
             alignment: Alignment.bottomCenter,
             child: _buildBottomNav(),
@@ -164,6 +206,10 @@ class _TenantScreenState extends State<TenantScreen> {
   }
 
   Widget _buildStatBar() {
+    final countTotal = _tenants.length;
+    final countActive = _tenants.where((t) => t['status'] == 'กำลังเช่า').length;
+    final countEmpty = _tenants.where((t) => t['status'] != 'กำลังเช่า').length;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -177,7 +223,7 @@ class _TenantScreenState extends State<TenantScreen> {
               bg: const Color(0xFFEAF2FB),
               icon: Icons.people,
               iconColor: const Color(0xFF4181CB),
-              number: '50',
+              number: countTotal.toString(),
               label: 'ผู้เช่าทั้งหมด',
             ),
           ),
@@ -186,7 +232,7 @@ class _TenantScreenState extends State<TenantScreen> {
               bg: const Color(0xFFE9F7EC),
               icon: Icons.people,
               iconColor: const Color(0xFF4CAF50),
-              number: '48',
+              number: countActive.toString(),
               label: 'กำลังเช่า',
             ),
           ),
@@ -195,8 +241,8 @@ class _TenantScreenState extends State<TenantScreen> {
               bg: const Color(0xFFF2F2F2),
               icon: Icons.person_outline,
               iconColor: const Color(0xFF999999),
-              number: '2',
-              label: 'ว่าง/รอ',
+              number: countEmpty.toString(),
+              label: 'อื่นๆ',
               trailingChevron: true,
             ),
           ),
@@ -306,14 +352,13 @@ class _TenantScreenState extends State<TenantScreen> {
 
   Widget _buildTenantCard(Map<String, String> t) {
     final isActive = t['status'] == 'กำลังเช่า';
-    final isMaster = t['role'] == 'ผู้เช่าหลัก';
-    final isRoommate = t['role'] == 'Roommate';
+    final index = _tenants.indexOf(t);
     return GestureDetector(
-      onTap: isMaster
-          ? widget.onNavigateToMasterTenant
-          : isRoommate
-              ? widget.onNavigateToEditeTenant
-              : null,
+      onTap: () {
+        widget.selectedTenantIndex?.call(index);
+        widget.onTenantSelected?.call();
+        widget.onNavigateToMasterTenant?.call();
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -416,8 +461,9 @@ class _TenantScreenState extends State<TenantScreen> {
     const navWidth = 320.0;
     const itemCount = 6;
     const circleSize = 40.0;
+    const activeIndex = 1; // tenant = index 1 เสมอ
     final slot = navWidth / itemCount;
-    final indicatorLeft = slot * _selectedIndex + (slot - circleSize) / 2;
+    final indicatorLeft = slot * activeIndex + (slot - circleSize) / 2;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -470,16 +516,20 @@ class _TenantScreenState extends State<TenantScreen> {
       3: Icons.build_outlined,
     };
 
+    const activeIndex = 1; // tenant = index 1 เสมอ
     return List.generate(6, (i) {
-      final isActive = i == _selectedIndex;
+      final isActive = i == activeIndex;
       final color = isActive ? const Color(0xFF4F8FDB) : Colors.white;
       return GestureDetector(
         onTap: () {
-          setState(() => _selectedIndex = i);
           if (i == 0 && widget.onNavigateToDashboard != null) {
             widget.onNavigateToDashboard!();
+          } else if (i == 2 && widget.onNavigateToBill != null) {
+            widget.onNavigateToBill!();
           } else if (i == 3 && widget.onNavigateToReportRepair != null) {
             widget.onNavigateToReportRepair!();
+          } else if (i == 4 && widget.onNavigateToAnnounce != null) {
+            widget.onNavigateToAnnounce!();
           } else if (i == 5 && widget.onNavigateToProfile != null) {
             widget.onNavigateToProfile!();
           }

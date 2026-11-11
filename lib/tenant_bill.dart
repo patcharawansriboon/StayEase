@@ -8,9 +8,16 @@ class TenantBillScreen extends StatefulWidget {
   final VoidCallback? onNavigateToReportRepair;
   final VoidCallback? onNavigateToAnnouncement;
   final VoidCallback? onNavigateToProfile;
+  final VoidCallback? onCreateBill;
   final void Function(Map<String, dynamic> bill)? onTapBill;
   final List<Map<String, String>> tenants;
   final Map<String, dynamic> currentBill;
+
+  /// บิลจริงจาก Supabase (ถ้ามี) — ถ้าว่างจะใช้ข้อมูลจำลองเดิม
+  final List<Map<String, dynamic>> bills;
+
+  /// สรุปจำนวนบิลตามสถานะ {pending, review, paid}
+  final Map<String, int> billStats;
 
   const TenantBillScreen({
     super.key,
@@ -20,9 +27,12 @@ class TenantBillScreen extends StatefulWidget {
     this.onNavigateToReportRepair,
     this.onNavigateToAnnouncement,
     this.onNavigateToProfile,
+    this.onCreateBill,
     this.onTapBill,
     this.tenants = const [],
     this.currentBill = const {},
+    this.bills = const [],
+    this.billStats = const {},
   });
 
   @override
@@ -31,7 +41,6 @@ class TenantBillScreen extends StatefulWidget {
 
 class _TenantBillScreenState extends State<TenantBillScreen> {
   final TextEditingController _searchController = TextEditingController();
-  int _selectedIndex = 2;
   String _filter = 'all';
 
   @override
@@ -118,7 +127,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
           SizedBox(
             height: 32,
             child: ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: widget.onCreateBill,
               icon: const Icon(Icons.add, size: 14, color: Colors.white),
               label: const Text(
                 'สร้างบิล',
@@ -144,12 +153,25 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   Widget _buildSummary() {
+    // ใช้สถิติจริงถ้ามี ไม่งั้นนับจากรายการบิลที่แสดงอยู่
+    final stats = widget.billStats;
+    int pending = stats['pending'] ?? 0;
+    int review = stats['review'] ?? 0;
+    int paid = stats['paid'] ?? 0;
+
+    if (stats.isEmpty) {
+      final bills = _buildBills();
+      pending = bills.where((b) => b['status'] == 'pending').length;
+      review = bills.where((b) => b['status'] == 'review').length;
+      paid = bills.where((b) => b['status'] == 'paid').length;
+    }
+
     return Row(
       children: [
         Expanded(
           child: _buildSummaryCard(
             title: 'รอชำระ',
-            value: '12',
+            value: '$pending',
             color: const Color(0xFFE05C5C),
             background: const Color(0xFFFCE9E9),
           ),
@@ -158,7 +180,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         Expanded(
           child: _buildSummaryCard(
             title: 'รอตรวจสอบ',
-            value: '3',
+            value: '$review',
             color: const Color(0xFFE6A700),
             background: const Color(0xFFFFF8E5),
           ),
@@ -167,7 +189,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         Expanded(
           child: _buildSummaryCard(
             title: 'ชำระแล้ว',
-            value: '45',
+            value: '$paid',
             color: const Color(0xFF4CAF50),
             background: const Color(0xFFE9F7EC),
           ),
@@ -508,8 +530,9 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
     const width = 320.0;
     const count = 6;
     const size = 40.0;
+    const activeIndex = 2; // bill = index 2 เสมอ
     final slot = width / count;
-    final indicatorLeft = slot * _selectedIndex + (slot - size) / 2;
+    final indicatorLeft = slot * activeIndex + (slot - size) / 2;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -544,7 +567,8 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
           ),
           Row(
             children: List.generate(count, (index) {
-              final selected = index == _selectedIndex;
+              const activeIndex = 2;
+              final selected = index == activeIndex;
               final color = selected ? const Color(0xFF4F8FDB) : Colors.white;
               return GestureDetector(
                 onTap: () => _navigate(index),
@@ -585,7 +609,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   void _navigate(int index) {
-    setState(() => _selectedIndex = index);
+    // ไม่ setState _selectedIndex เพราะ indicator ต้อง fix ที่ index 2 (bill) เสมอ
     switch (index) {
       case 0:
         print('Bottom nav tapped: Home (index 0) → navigate to Dashboard');
@@ -617,6 +641,12 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   List<Map<String, dynamic>> _buildBills() {
+    // ใช้บิลจริงจาก Supabase ถ้ามี
+    if (widget.bills.isNotEmpty) {
+      return widget.bills;
+    }
+
+    // ไม่มีบิลจริง → ข้อมูลจำลอง (fallback)
     final bill = widget.currentBill;
     final tenantList = widget.tenants.isNotEmpty
         ? widget.tenants

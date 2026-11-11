@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BuildNewDormitoryScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -24,6 +25,20 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _dormCodeController = TextEditingController();
+
+  // Validation states
+  String? _dormCodeError;
+  bool _isCheckingDormCode = false;
+  String? _nameError;
+  String? _addressError;
+  String? _phoneError;
+  String? _floorCountError;
+  String? _totalRoomsError;
+  String? _roomFormatError;
+  String? _maxTenantsError;
+  String? _roomArrangementError;
+  List<String> _roomFormatPreview = [];
 
   // Step 2
   final _floorCountController = TextEditingController();
@@ -33,21 +48,205 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
   String? _roomArrangement; // 'empty' | 'occupied'
 
   @override
+  void initState() {
+    super.initState();
+    _roomNumberFormatController.addListener(_updateRoomFormatPreview);
+    _floorCountController.addListener(_updateRoomFormatPreview);
+  }
+
+  /// สร้างตัวอย่างเลขห้อง 3-5 ห้องแรก เพื่อแสดง preview ให้แอดมินเห็น
+  void _updateRoomFormatPreview() {
+    final format = _roomNumberFormatController.text.trim();
+    if (format.isEmpty) {
+      setState(() => _roomFormatPreview = []);
+      return;
+    }
+
+    final floorCount =
+        int.tryParse(_floorCountController.text.trim()) ?? 1;
+    final samples = <String>[];
+
+    for (int floor = 1; floor <= floorCount && samples.length < 5; floor++) {
+      for (int i = 1; i <= 3 && samples.length < 5; i++) {
+        String roomNumber;
+        if (format.contains('{floor}') || format.contains('{room}')) {
+          roomNumber = format
+              .replaceAll('{floor}', floor.toString())
+              .replaceAll('{room}', i.toString().padLeft(2, '0'));
+        } else if (RegExp(r'\w+-\w+').hasMatch(format)) {
+          // range format: A101-A110,A201-A210 → แสดงห้องแรกของแต่ละ segment
+          final segments = format.split(',');
+          for (final seg in segments) {
+            if (samples.length >= 5) break;
+            final parts = seg.trim().split('-');
+            if (parts.length == 2) {
+              final fromStr = parts[0].trim();
+              final toStr   = parts[1].trim();
+              final prefixMatch = RegExp(r'^(.*?)(\d+)$').firstMatch(fromStr);
+              final prefix = prefixMatch?.group(1) ?? '';
+              final from   = int.tryParse(prefixMatch?.group(2) ?? '') ?? 1;
+              final toMatch = RegExp(r'(\d+)$').firstMatch(toStr);
+              final to = int.tryParse(toMatch?.group(1) ?? '') ?? from;
+              for (int n = from; n <= to && samples.length < 5; n++) {
+                samples.add('$prefix$n');
+              }
+            }
+          }
+          setState(() => _roomFormatPreview = samples);
+          return;
+        } else {
+          final floorAwareMatch =
+              RegExp(r'^(.*?)([1-9])(\d{2,})$').firstMatch(format);
+          final floorDigitVal =
+              int.tryParse(floorAwareMatch?.group(2) ?? '');
+
+          if (floorAwareMatch != null &&
+              floorDigitVal == 1 &&
+              floorCount > 1) {
+            final prefixStr = floorAwareMatch.group(1)!;
+            final roomSuffix = floorAwareMatch.group(3)!;
+            final roomPad = roomSuffix.length;
+            roomNumber = '$prefixStr$floor${i.toString().padLeft(roomPad, '0')}';
+          } else {
+            final match = RegExp(r'(\d+)\s*$').firstMatch(format);
+            if (match == null) {
+              final roomIndex = (floor - 1) * 3 + i;
+              roomNumber = '$format$roomIndex';
+            } else {
+              final digits = match.group(1) ?? '';
+              final start = int.tryParse(digits) ?? 1;
+              final roomIndex = (floor - 1) * 3 + i;
+              final seq = start + roomIndex - 1;
+              roomNumber =
+                  '${format.substring(0, match.start)}${seq.toString().padLeft(digits.length, '0')}';
+            }
+          }
+        }
+        if (!samples.contains(roomNumber)) samples.add(roomNumber);
+      }
+    }
+
+    setState(() => _roomFormatPreview = samples);
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
+    _dormCodeController.dispose();
     _floorCountController.dispose();
     _totalRoomsController.dispose();
     _roomNumberFormatController.dispose();
     super.dispose();
   }
 
-  void _onNext() {
+  Future<void> _validateDormCode() async {
+    final code = _dormCodeController.text.trim().toUpperCase();
+    if (code.isEmpty) {
+      setState(() {
+        _dormCodeError = 'กรุณากรอกรหัสหอพัก';
+        _isCheckingDormCode = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingDormCode = true;
+      _dormCodeError = null;
+    });
+
+    try {
+      final row = await Supabase.instance.client
+          .from('dormitories')
+          .select('id')
+          .eq('dorm_code', code)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (row != null) {
+        setState(() {
+          _dormCodeError = 'รหัสหอพักนี้มีอยู่แล้ว กรุณาเปลี่ยนรหัสใหม่';
+          _isCheckingDormCode = false;
+        });
+      } else {
+        setState(() {
+          _dormCodeError = null;
+          _isCheckingDormCode = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dormCodeError = null;
+        _isCheckingDormCode = false;
+      });
+    }
+  }
+
+  bool _validateStep1() {
+    bool valid = true;
+    setState(() {
+      _nameError = _nameController.text.trim().isEmpty ? 'กรุณากรอกชื่อหอพัก' : null;
+      if (_nameError != null) valid = false;
+
+      _addressError = _addressController.text.trim().isEmpty ? 'กรุณากรอกที่อยู่หอพัก' : null;
+      if (_addressError != null) valid = false;
+
+      _phoneError = _phoneController.text.trim().length != 10 ? 'กรุณากรอกเบอร์โทรศัพท์ 10 หลัก' : null;
+      if (_phoneError != null) valid = false;
+    });
+    return valid;
+  }
+
+  bool _validateStep2() {
+    bool valid = true;
+    setState(() {
+      _floorCountError = _floorCountController.text.trim().isEmpty || int.tryParse(_floorCountController.text) == null || int.tryParse(_floorCountController.text) == 0
+          ? 'กรุณากรอกจำนวนชั้น'
+          : null;
+      if (_floorCountError != null) valid = false;
+
+      _totalRoomsError = _totalRoomsController.text.trim().isEmpty || int.tryParse(_totalRoomsController.text) == null || int.tryParse(_totalRoomsController.text) == 0
+          ? 'กรุณากรอกจำนวนห้องพัก'
+          : null;
+      if (_totalRoomsError != null) valid = false;
+
+      _roomFormatError = _roomNumberFormatController.text.trim().isEmpty ? 'กรุณากรอกรูปแบบเลขห้อง' : null;
+      if (_roomFormatError != null) valid = false;
+
+      _maxTenantsError = _maxTenants == null ? 'กรุณาเลือกจำนวนผู้เช่า' : null;
+      if (_maxTenantsError != null) valid = false;
+
+      _roomArrangementError = _roomArrangement == null ? 'กรุณาเลือกรูปแบบการจัดห้อง' : null;
+      if (_roomArrangementError != null) valid = false;
+    });
+    return valid;
+  }
+
+  Future<void> _onNext() async {
+    if (_currentStep == 1) {
+      if (!_validateStep1()) return;
+      await _validateDormCode();
+      if (_dormCodeError != null) return;
+    }
+
+    if (_currentStep == 2) {
+      if (!_validateStep2()) return;
+    }
+
+    if (_currentStep == 3) {
+      if (!_validateStep1()) return;
+      await _validateDormCode();
+      if (_dormCodeError != null) return;
+    }
+
     if (_currentStep < 3) {
       setState(() => _currentStep++);
     } else {
       final data = {
+        'dorm_code': _dormCodeController.text.trim().toUpperCase(),
         'name': _nameController.text,
         'address': _addressController.text,
         'phone': _phoneController.text,
@@ -106,12 +305,13 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
         const SizedBox(height: 16),
         _buildLabel('ชื่อหอพัก'),
         _buildInput(_nameController,
-            hint: 'กรุณากรอกชื่อที่พัก', icon: Icons.home_outlined),
+            hint: 'กรุณากรอกชื่อที่พัก', icon: Icons.home_outlined, errorText: _nameError),
         const SizedBox(height: 16),
         _buildLabel('ที่อยู่หอพัก'),
         _buildInput(_addressController,
             hint: 'กรุณากรอกที่อยู่ของที่พัก',
-            icon: Icons.location_on_outlined),
+            icon: Icons.location_on_outlined,
+            errorText: _addressError),
         const SizedBox(height: 16),
         _buildLabelRequired('เบอร์โทรศัพท์ติดต่อหอพัก'),
         _buildInput(
@@ -123,6 +323,16 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(10),
           ],
+          errorText: _phoneError,
+        ),
+        const SizedBox(height: 16),
+        _buildLabelRequired('รหัสหอพัก'),
+        _buildInput(
+          _dormCodeController,
+          hint: 'เช่น STAY01',
+          icon: Icons.confirmation_number_outlined,
+          errorText: _dormCodeError,
+          onEditingComplete: _validateDormCode,
         ),
       ],
     );
@@ -142,6 +352,7 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
           icon: Icons.apartment_outlined,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          errorText: _floorCountError,
         ),
         const SizedBox(height: 16),
         _buildLabelRequired('จำนวนห้องพักทั้งหมด'),
@@ -151,17 +362,61 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
           icon: Icons.meeting_room_outlined,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          errorText: _totalRoomsError,
         ),
         const SizedBox(height: 16),
         _buildLabelRequired('รูปแบบเลขห้อง'),
         _buildInput(
           _roomNumberFormatController,
-          hint: 'กรุณากรอกรูปแบบเลขห้อง',
+          hint: 'เช่น A101, 101, {floor}{room}',
           icon: Icons.tag,
+          errorText: _roomFormatError,
         ),
+        if (_roomFormatPreview.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FB),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.preview_outlined,
+                      size: 16, color: Color(0xFF4181CB)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'ตัวอย่างห้อง: ${_roomFormatPreview.join(', ')}...',
+                      style: const TextStyle(
+                        fontFamily: 'Prompt',
+                        fontSize: 12,
+                        color: Color(0xFF4181CB),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         _buildLabelRequired('จำนวนผู้เช่าสูงสุดต่อห้อง'),
         _buildMaxTenantsDropdown(),
+        if (_maxTenantsError != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: 8),
+            child: Text(
+              _maxTenantsError!,
+              style: const TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 12,
+                color: Color(0xFFFF3B30),
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         _buildLabelRequired('รูปแบบการจัดห้อง'),
         const SizedBox(height: 4),
@@ -175,6 +430,18 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
           title: 'มีผู้เช่า ',
           hint: '(บางห้องมีผู้เช่าอยู่แล้ว)',
         ),
+        if (_roomArrangementError != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: 8),
+            child: Text(
+              _roomArrangementError!,
+              style: const TextStyle(
+                fontFamily: 'Prompt',
+                fontSize: 12,
+                color: Color(0xFFFF3B30),
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         _buildNoteBox(),
       ],
@@ -336,12 +603,17 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'ระบบจะสร้างห้องตามรูปแบบเลขห้องที่คุณกำหนด และคุณสามารถแก้ไขรายละเอียดห้องแต่ละห้องได้ในภายหลัง',
+            'รูปแบบที่รองรับ:\n'
+            '• A101-A110,A201-A210  →  A101…A110, A201…A210 (range แต่ละชั้น)\n'
+            '• A101  →  A101…A110, A201…A210 (อักษร+ชั้น+ลำดับ)\n'
+            '• 101   →  101, 102, 103 ... (ตัวเลขล้วน)\n'
+            '• {floor}{room}  →  101, 102, 201, 202 (กำหนด floor เอง)\n\n'
+            'เคล็ดลับ: กรอกรูปแบบในช่องด้านบนแล้วดูตัวอย่างห้องได้ทันที',
             style: TextStyle(
               fontFamily: 'Prompt',
               fontSize: 12,
               color: Color(0xFF666666),
-              height: 1.6,
+              height: 1.7,
             ),
           ),
         ],
@@ -351,6 +623,22 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
 
   // ---- Step 3: ยืนยัน ----
   Widget _buildStep3() {
+    final floorCount = _floorCountController.text.isNotEmpty
+        ? '${_floorCountController.text} ชั้น'
+        : '-';
+    final totalRooms = _totalRoomsController.text.isNotEmpty
+        ? '${_totalRoomsController.text} ห้อง'
+        : '-';
+    final roomFormat = _roomNumberFormatController.text.isNotEmpty
+        ? _roomNumberFormatController.text
+        : '-';
+    final maxTenants = _maxTenants != null ? '$_maxTenants คน' : '-';
+    final roomArrangement = _roomArrangement == 'occupied'
+        ? 'บางห้องมีผู้เช่าอยู่แล้ว'
+        : _roomArrangement == 'empty'
+            ? 'ห้องว่างพร้อมให้เช่า'
+            : '-';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -359,6 +647,66 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
         _buildSummaryCard(),
         const SizedBox(height: 16),
         _buildSectionTitle('ข้อมูลหอพัก'),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+          ),
+          child: Column(
+            children: [
+              _buildDetailRow('จำนวนชั้น', floorCount, isFirst: true),
+              _buildDetailRow('จำนวนห้องพักทั้งหมด', totalRooms),
+              _buildDetailRow('รูปแบบเลขห้อง', roomFormat),
+              _buildDetailRow('จำนวนผู้เช่าสูงสุดต่อห้อง', maxTenants),
+              _buildDetailRow('รูปแบบการจัดห้อง', roomArrangement, isLast: true),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value,
+      {bool isFirst = false, bool isLast = false}) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 5,
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 14,
+                    color: Color(0xFF888888),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 5,
+                child: Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF000000),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
       ],
     );
   }
@@ -400,9 +748,9 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
               children: [
                 const Text(
                   'ชื่อหอพัก',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'Prompt',
-                    fontSize: 12,
+                    fontSize: 14,
                     color: Color(0xFF999999),
                   ),
                 ),
@@ -411,7 +759,6 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
                   style: const TextStyle(
                     fontFamily: 'Prompt',
                     fontSize: 15,
-                    fontWeight: FontWeight.w600,
                     color: Color(0xFF000000),
                   ),
                 ),
@@ -443,7 +790,7 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
                 label,
                 style: const TextStyle(
                   fontFamily: 'Prompt',
-                  fontSize: 12,
+                  fontSize: 14,
                   color: Color(0xFF999999),
                 ),
               ),
@@ -452,7 +799,6 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
                 style: const TextStyle(
                   fontFamily: 'Prompt',
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),
@@ -734,55 +1080,79 @@ class _BuildNewDormitoryScreenState extends State<BuildNewDormitoryScreen> {
     IconData? icon,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    String? errorText,
+    VoidCallback? onEditingComplete,
   }) {
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Row(
-        children: [
-          if (icon != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, right: 4),
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F2F2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 18, color: const Color(0xFF999999)),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: errorText != null
+                  ? const Color(0xFFFF3B30)
+                  : const Color(0xFFE0E0E0),
             ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              keyboardType: keyboardType,
-              inputFormatters: inputFormatters,
+          ),
+          child: Row(
+            children: [
+              if (icon != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 4),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF2F2F2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, size: 18, color: const Color(0xFF999999)),
+                  ),
+                ),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  keyboardType: keyboardType,
+                  inputFormatters: inputFormatters,
+                  onEditingComplete: onEditingComplete,
+                  style: const TextStyle(
+                    fontFamily: 'Prompt',
+                    fontSize: 15,
+                    color: Color(0xFF000000),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    hintStyle: const TextStyle(
+                      fontFamily: 'Prompt',
+                      fontSize: 15,
+                      color: Color(0xFFAAAAAA),
+                    ),
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Text(
+              errorText,
               style: const TextStyle(
                 fontFamily: 'Prompt',
-                fontSize: 15,
-                color: Color(0xFF000000),
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: const TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 15,
-                  color: Color(0xFFAAAAAA),
-                ),
-                isCollapsed: true,
-                border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                fontSize: 12,
+                color: Color(0xFFFF3B30),
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 

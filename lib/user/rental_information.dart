@@ -1,11 +1,15 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../widgets/app_sizes.dart';
 class RentalInformationScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onEdit;
+  final String avatarUrl;
+  final ValueChanged<String>? onAvatarChanged;
   final String userName;
   final String userPhone;
   final Map<String, String> rentalInfo;
@@ -16,6 +20,8 @@ class RentalInformationScreen extends StatefulWidget {
     super.key,
     this.onBack,
     this.onEdit,
+    this.avatarUrl = '',
+    this.onAvatarChanged,
     this.userName = 'พัชราวรรณ  ศรีบุญ',
     this.userPhone = '099-0000000',
     this.rentalInfo = const {},
@@ -29,7 +35,7 @@ class RentalInformationScreen extends StatefulWidget {
 }
 
 class _RentalInformationScreenState extends State<RentalInformationScreen> {
-  File? _profileImage;
+  Uint8List? _profileImageBytes;
 
   @override
   void initState() {
@@ -60,7 +66,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
               child: Text(
                 'บันทึกเรียบร้อย',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF000000),
@@ -77,8 +83,29 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => _profileImage = File(picked.path));
+    if (picked != null && mounted) {
+      final bytes = await picked.readAsBytes();
+      setState(() => _profileImageBytes = bytes);
+      try {
+        final db = Supabase.instance.client;
+        final uid = db.auth.currentUser?.id;
+        if (uid != null) {
+          final ext = picked.path.split('.').last;
+          final path =
+              'avatars/${uid}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          await db.storage.from('dormitory-images').uploadBinary(
+                path,
+                bytes,
+                fileOptions: const FileOptions(upsert: true),
+              );
+          final url = db.storage.from('dormitory-images').getPublicUrl(path);
+          await db.from('tenants').update({'avatar_url': url}).eq('id', uid);
+          await db.from('roommate_invites').update({'avatar_url': url}).eq('id', uid);
+          widget.onAvatarChanged?.call(url);
+        }
+      } catch (e) {
+        debugPrint('avatar upload error: $e');
+      }
     }
   }
 
@@ -90,6 +117,10 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ตรวจสอบว่ามีข้อมูลการเช่าหรือไม่
+    final hasRentalData = ['building', 'room', 'floor', 'check_in', 'check_out', 'rent', 'deposit']
+        .any((key) => (widget.rentalInfo[key] ?? '').isNotEmpty);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
@@ -117,13 +148,15 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                                 color: const Color(0xFF4F8FDB), width: 2),
                           ),
                           child: ClipOval(
-                            child: _profileImage != null
-                                ? Image.file(_profileImage!, fit: BoxFit.cover)
-                                : const Icon(
-                                    Icons.person_outline,
-                                    size: 32,
-                                    color: Color(0xFF4F8FDB),
-                                  ),
+child: _profileImageBytes != null
+                                    ? Image.memory(_profileImageBytes!, fit: BoxFit.cover)
+                                    : (widget.avatarUrl.isNotEmpty
+                                        ? Image.network(widget.avatarUrl, fit: BoxFit.cover)
+                                        : const Icon(
+                                            Icons.person_outline,
+                                            size: 32,
+                                            color: Color(0xFF4F8FDB),
+                                          )),
                           ),
                         ),
                         Positioned(
@@ -174,15 +207,20 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
                       svgIcon: 'assets/images/home_rental.svg',
                       title: 'ข้อมูลการเช่า',
                       showEdit: false,
-                      rows: [
-                        _InfoRow('อาคาร', 'A'),
-                        _InfoRow('ห้อง', 'A301'),
-                        _InfoRow('ชั้น', '3'),
-                        _InfoRow('วันที่เข้าพัก', '1 มกราคม 2569'),
-                        _InfoRow('สิ้นสุดสัญญา', '31 ธันวาคม 2569'),
-                        _InfoRow('ค่าเช่าห้อง', '4,500'),
-                        _InfoRow('เงินประกัน', '10,000'),
-                      ],
+                      rows: hasRentalData
+                          ? [
+                              _InfoRow('อาคาร', _val('building', '', 'A')),
+                              _InfoRow('ห้อง', _val('room', '', 'A301')),
+                              _InfoRow('ชั้น', _val('floor', '', '3')),
+                              _InfoRow('วันที่เข้าพัก', _val('check_in', '', '1 มกราคม 2569')),
+                              _InfoRow('สิ้นสุดสัญญา', _val('check_out', '', '31 ธันวาคม 2569')),
+                              _InfoRow('ค่าเช่าห้อง', _val('rent', '', '4,500')),
+                              _InfoRow('เงินประกัน', _val('deposit', '', '10,000')),
+                            ]
+                          : [
+                              _InfoRow('ยังไม่มีข้อมูล', '',
+                                  isPlaceholder: true),
+                            ],
                     ),
                     const SizedBox(height: 12),
 
@@ -233,7 +271,7 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -242,8 +280,9 @@ class _RentalInformationScreenState extends State<RentalInformationScreen> {
               child: Text(
                 'ข้อมูลการเช่า',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),
@@ -288,7 +327,7 @@ return Container(
               Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF4F8FDB),
@@ -326,7 +365,7 @@ return Container(
                         child: Text(
                           row.label,
                           style: const TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                             color: Color(0xFF000000),
@@ -339,7 +378,7 @@ return Container(
                           child: Text(
                             row.value,
                             style: TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: row.isPlaceholder
@@ -360,11 +399,71 @@ return Container(
     );
   }
 
+  // แสดงรูปเอกสารแบบเต็มจอ
+  void _previewDocument(String title, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Noto Sans Thai',
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text(
+                      'ไม่สามารถแสดงไฟล์นี้ได้',
+                      style:
+                          TextStyle(fontFamily: 'Noto Sans Thai', color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDocumentSection() {
     final raw = widget.rentalInfo['documents'] ?? '';
+    // แต่ละบรรทัดรูปแบบ "ชื่อ|url"
     final documents = raw.isEmpty
-        ? <String>[]
-        : raw.split('\n').where((e) => e.trim().isNotEmpty).toList();
+        ? <Map<String, String>>[]
+        : raw.split('\n').where((e) => e.trim().isNotEmpty).map((line) {
+            final parts = line.split('|');
+            return {
+              'title': parts[0].trim(),
+              'url': parts.length > 1 ? parts[1].trim() : '',
+            };
+          }).toList();
 
 return Container(
        width: double.infinity,
@@ -388,7 +487,7 @@ return Container(
               const Text(
                 'เอกสารแนบ',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF4F8FDB),
@@ -424,7 +523,7 @@ return Container(
                 child: const Text(
                   'เพิ่มเอกสาร',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFFD9D9D9),
@@ -433,8 +532,13 @@ return Container(
               ),
             )
           else
-            ...documents.map((title) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+            ...documents.map((doc) {
+              final title = doc['title'] ?? 'เอกสาร';
+              final url = doc['url'] ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: url.isEmpty ? null : () => _previewDocument(title, url),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 14),
@@ -451,17 +555,24 @@ return Container(
                         Expanded(
                           child: Text(
                             title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 14,
                               color: Color(0xFF000000),
                             ),
                           ),
                         ),
+                        if (url.isNotEmpty)
+                          const Icon(Icons.visibility_outlined,
+                              size: 18, color: Color(0xFF4F8FDB)),
                       ],
                     ),
                   ),
-                )),
+                ),
+              );
+            }),
         ],
       ),
     );

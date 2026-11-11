@@ -5,3 +5,5 @@ build/
 .DS_Store
 debug.log
 .kiro/
+.kilo/
+flutter_01.png

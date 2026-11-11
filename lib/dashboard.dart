@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String adminName;
   final VoidCallback? onNavigateToTenant;
   final VoidCallback? onNavigateToBill;
   final VoidCallback? onNavigateToNotification;
+  final VoidCallback? onNavigateToAnnounce;
   final VoidCallback? onNavigateToReportRepair;
   final VoidCallback? onNavigateToProfile;
   // mock data
@@ -18,6 +20,7 @@ class DashboardScreen extends StatefulWidget {
     this.onNavigateToTenant,
     this.onNavigateToBill,
     this.onNavigateToNotification,
+    this.onNavigateToAnnounce,
     this.onNavigateToReportRepair,
     this.onNavigateToProfile,
     this.stats = const {
@@ -34,7 +37,51 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 0;
+  int? _totalRooms;
+  int? _vacantRooms;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoomStats();
+  }
+
+  Future<void> _loadRoomStats() async {
+    try {
+      final db = Supabase.instance.client;
+      final uid = db.auth.currentUser?.id;
+      print('🔍 _loadRoomStats uid=$uid');
+      if (uid == null) return;
+
+      // ดึง dormitory id และ total_rooms จาก dormitories table
+      final dormRow = await db
+          .from('dormitories')
+          .select('id, total_rooms')
+          .eq('created_by', uid)
+          .maybeSingle();
+      print('🔍 _loadRoomStats dormRow=$dormRow');
+      if (dormRow == null) return;
+
+      final dormId  = dormRow['id'].toString();
+      final dbTotal = dormRow['total_rooms'] as int? ?? 0;
+
+      // ดึงจำนวนห้องว่าง
+      final vacantRes = await db
+          .from('rooms')
+          .select('id')
+          .eq('dormitory_id', dormId)
+          .eq('status', 'vacant');
+      print('🔍 _loadRoomStats vacant=${(vacantRes as List).length}');
+
+      if (!mounted) return;
+      setState(() {
+        _totalRooms  = dbTotal;
+        _vacantRooms = (vacantRes).length;
+      });
+    } catch (e) {
+      print('❌ _loadRoomStats error: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +175,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ---- Stat grid (2x2) ----
   Widget _buildStatGrid() {
     final s = widget.stats;
+    // ห้องทั้งหมดและห้องว่าง: ดึงจาก Supabase โดยตรงใน initState
+    final totalRoomsDisplay  = '${_totalRooms  ?? 0}';
+    final vacantRoomsDisplay = '${_vacantRooms ?? 0}';
+
     return Column(
       children: [
         Row(
@@ -147,7 +198,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 bg: const Color(0xFFFFF8E5),
                 icon: Icons.home,
                 iconColor: const Color(0xFFE6A700),
-                number: '${s['total_rooms'] ?? 0}',
+                number: totalRoomsDisplay,
                 label: 'ห้องทั้งหมด',
               ),
             ),
@@ -161,7 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 bg: const Color(0xFFE9F7EC),
                 icon: Icons.meeting_room,
                 iconColor: const Color(0xFF4CAF50),
-                number: '${s['vacant_rooms'] ?? 0}',
+                number: vacantRoomsDisplay,
                 label: 'ห้องว่าง',
               ),
             ),
@@ -446,8 +497,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const navWidth = 320.0;
     const circleSize = 40.0;
     const itemCount = 6;
+    const activeIndex = 0; // dashboard = index 0 เสมอ
     final slot = navWidth / itemCount;
-    final indicatorLeft = slot * _selectedIndex + (slot - circleSize) / 2;
+    final indicatorLeft = slot * activeIndex + (slot - circleSize) / 2;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -498,8 +550,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     };
     final materialIcons = <int, IconData>{3: Icons.build_outlined};
 
+    const activeIndex = 0; // dashboard = index 0 เสมอ
     return List.generate(6, (i) {
-      final isActive = i == _selectedIndex;
+      final isActive = i == activeIndex;
       final iconColor = isActive ? const Color(0xFF4F8FDB) : Colors.white;
 
       final Widget iconWidget = svgPaths.containsKey(i)
@@ -513,15 +566,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       return GestureDetector(
         onTap: () {
-          setState(() => _selectedIndex = i);
           if (i == 1 && widget.onNavigateToTenant != null) {
             widget.onNavigateToTenant!();
           } else if (i == 2 && widget.onNavigateToBill != null) {
             widget.onNavigateToBill!();
           } else if (i == 3 && widget.onNavigateToReportRepair != null) {
             widget.onNavigateToReportRepair!();
-          } else if (i == 4 && widget.onNavigateToNotification != null) {
-            widget.onNavigateToNotification!();
+          } else if (i == 4 && widget.onNavigateToAnnounce != null) {
+            widget.onNavigateToAnnounce!();
           } else if (i == 5 && widget.onNavigateToProfile != null) {
             widget.onNavigateToProfile!();
           }

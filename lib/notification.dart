@@ -4,11 +4,17 @@ import 'package:flutter_svg/flutter_svg.dart';
 class NotificationScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final bool isTenant;
+  final VoidCallback? onNavigateToDormitoryRequest;
+  final VoidCallback? onNavigateToRoommateRequest;
+  final VoidCallback? onNavigateToRequestChangeTenant;
 
   const NotificationScreen({
     super.key,
     this.onBack,
     this.isTenant = false,
+    this.onNavigateToDormitoryRequest,
+    this.onNavigateToRoommateRequest,
+    this.onNavigateToRequestChangeTenant,
   });
 
   @override
@@ -62,9 +68,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 if (widget.isTenant) ...[
                   _buildToggleRow(
                      iconAsset: 'assets/images/plump_announce.svg',
-                    label: 'ประกาศจากแอดมิน',
-                    value: _dormitoryRequest,
-                    onChanged: (v) => setState(() => _dormitoryRequest = v),
+                     label: 'ประกาศจากแอดมิน',
+                     value: _dormitoryRequest,
+                     onChanged: (v) => setState(() => _dormitoryRequest = v),
                   ),
                   const SizedBox(height: 10),
                   _buildToggleRow(
@@ -82,17 +88,17 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   ),
                 ] else ...[
                    _buildToggleRow(
-                    iconAsset: 'assets/images/fontisto_bell.svg',
-                    label: 'คำขอเข้าหอพัก',
-                    value: _dormitoryRequest,
-                    onChanged: (v) => setState(() => _dormitoryRequest = v),
+                     iconAsset: 'assets/images/fontisto_bell.svg',
+                     label: 'คำขอเข้าหอพัก',
+                     value: _dormitoryRequest,
+                     onChanged: (v) => setState(() => _dormitoryRequest = v),
                   ),
                   const SizedBox(height: 10),
                    _buildToggleRow(
-                    iconAsset: 'assets/images/fontisto_bell.svg',
-                    label: 'คำขอ Roommate',
-                    value: _roommateRequest,
-                    onChanged: (v) => setState(() => _roommateRequest = v),
+                     iconAsset: 'assets/images/fontisto_bell.svg',
+                     label: 'คำขอ Roommate',
+                     value: _roommateRequest,
+                     onChanged: (v) => setState(() => _roommateRequest = v),
                   ),
                   const SizedBox(height: 10),
                   _buildToggleRow(

@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>แอปต้องการใช้กล้องเพื่อถ่ายรูปมิเตอร์</string>
 </dict>
 </plist>

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -9,15 +10,35 @@ class MockService {
   final _db = Supabase.instance.client;
 
   // ── user ที่ login อยู่ ────────────────────────────────────
+
+  /// ตรวจว่า user ที่ login อยู่เป็น Roommate ไหม
+  /// (member_type = 'roommate' ใน dormitory_members)
+  Future<bool> isCurrentUserRoommate() async {
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) return false;
+      final row = await _db
+          .from('dormitory_members')
+          .select('member_type')
+          .eq('user_id', uid)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return row?['member_type']?.toString() == 'roommate';
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<Map<String, String>> getCurrentUser() async {
     try {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return _fallbackUser();
 
       for (final entry in [
-        {'table': 'admins',    'role': 'admin'},
-        {'table': 'tenants',   'role': 'tenant'},
-        {'table': 'roommates', 'role': 'roommate'},
+        {'table': 'admins',           'role': 'admin'},
+        {'table': 'tenants',          'role': 'tenant'},
+        {'table': 'roommate_invites', 'role': 'roommate'},
       ]) {
         final row = await _db
             .from(entry['table']!)
@@ -50,13 +71,31 @@ class MockService {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return _fallbackRoom();
 
-      final row = await _db
-          .from('rooms')
-          .select('room_number, floor, building, status')
-          .eq('tenant_id', uid)
+      // 1. ดึงจาก dormitory_members ที่ approved แล้ว (ห้องที่ admin ยืนยัน)
+      final approvedRow = await _db
+          .from('dormitory_members')
+          .select('room_id, rooms(room_number, floor, building, status)')
+          .eq('user_id', uid)
+          .eq('status', 'approved')
           .maybeSingle();
 
-      if (row != null) return Map<String, dynamic>.from(row);
+      final approvedRoom = approvedRow?['rooms'] as Map<String, dynamic>?;
+      if (approvedRoom != null && (approvedRoom['room_number'] ?? '').toString().isNotEmpty) {
+        return Map<String, dynamic>.from(approvedRoom);
+      }
+
+      // 2. fallback: ดึงจาก dormitory_members ที่ pending (ห้องที่เลือกตอน sign up)
+      final pendingRow = await _db
+          .from('dormitory_members')
+          .select('room_id, rooms(room_number, floor, building, status)')
+          .eq('user_id', uid)
+          .maybeSingle();
+
+      final pendingRoom = pendingRow?['rooms'] as Map<String, dynamic>?;
+      if (pendingRoom != null && (pendingRoom['room_number'] ?? '').toString().isNotEmpty) {
+        return Map<String, dynamic>.from(pendingRoom);
+      }
+
       return _fallbackRoom();
     } catch (_) {
       return _fallbackRoom();
@@ -64,10 +103,10 @@ class MockService {
   }
 
   Map<String, dynamic> _fallbackRoom() => {
-        'room_number': 'A101',
-        'floor':       1,
-        'building':    'A',
-        'status':      'occupied',
+        'room_number': '',
+        'floor':       '',
+        'building':    '',
+        'status':      '',
       };
 
   // ── บิลปัจจุบัน (pending ล่าสุด) ─────────────────────────
@@ -159,6 +198,23 @@ class MockService {
       ];
 
   // ── สถิติ dashboard (admin) ──────────────────────────────
+  /// ดึง dormitory id ของ admin ที่ login อยู่
+  Future<String?> getAdminDormitoryId() async {
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) return null;
+      final row = await _db
+          .from('dormitories')
+          .select('id')
+          .eq('created_by', uid)
+          .maybeSingle();
+      return row?['id']?.toString();
+    } catch (e) {
+      print('❌ getAdminDormitoryId error: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, int>> getDashboardStats({String? dormitoryId}) async {
     try {
       dynamic tenantsQuery = _db.from('tenants').select('id');
@@ -190,7 +246,8 @@ class MockService {
         'vacant_rooms':    vacantRooms,
         'repair_requests': repairCount,
       };
-    } catch (_) {
+    } catch (e) {
+      print('❌ getDashboardStats error: $e');
       return {'total_tenants': 0, 'total_rooms': 0, 'vacant_rooms': 0, 'repair_requests': 0};
     }
   }
@@ -232,60 +289,77 @@ class MockService {
       ];
 
   // ── รายชื่อผู้เช่าทั้งหมด (admin) ───────────────────────
+  // ดึงจาก dormitory_members (approved) + lookup ชื่อจาก tenants / roommate_invites
+  // หมายเหตุ: ไม่ embed เพราะ dormitory_members ไม่มี FK ตรงไปที่ tenants/roommate_invites
+  //          (user_id อ้าง auth.users) → ต้อง query แยกแล้ว map เอง
   Future<List<Map<String, String>>> getTenantList({String? dormitoryId}) async {
     try {
-      dynamic tenantsQuery = _db
-          .from('tenants')
-          .select('full_name, phone, status, id');
-
-      dynamic roommatesQuery = _db
-          .from('roommates')
-          .select('full_name, phone, status, id, tenant_id');
-
-      dynamic roomsQuery = _db
-          .from('rooms')
-          .select('tenant_id, room_number')
-          .not('tenant_id', 'is', null);
-
+      dynamic membersQuery = _db
+          .from('dormitory_members')
+          .select('user_id, member_type, status, room_id');
+      membersQuery = membersQuery.eq('status', 'approved');
+      membersQuery = membersQuery.eq('member_type', 'tenant'); // ไม่รวม roommate
       if (dormitoryId != null) {
-        tenantsQuery = tenantsQuery.eq('dormitory_id', dormitoryId);
-        roommatesQuery = roommatesQuery.eq('dormitory_id', dormitoryId);
-        roomsQuery = roomsQuery.eq('dormitory_id', dormitoryId);
+        membersQuery = membersQuery.eq('dormitory_id', dormitoryId);
       }
+      final members = await membersQuery;
+      final memberRows = (members as List).cast<Map<String, dynamic>>();
+      if (memberRows.isEmpty) return _fallbackTenantList();
 
-      tenantsQuery = tenantsQuery.order('full_name');
+      final userIds = memberRows
+          .map((m) => m['user_id']?.toString())
+          .whereType<String>()
+          .toSet()
+          .toList();
+      final roomIds = memberRows
+          .map((m) => m['room_id']?.toString())
+          .whereType<String>()
+          .toSet()
+          .toList();
 
-      final tenants = await tenantsQuery;
-      final roommates = await roommatesQuery;
-      final rooms = await roomsQuery;
+      final tenantRows = userIds.isEmpty
+          ? []
+          : await _db
+              .from('tenants')
+              .select('id, full_name, phone')
+              .inFilter('id', userIds);
+      final roomRows = roomIds.isEmpty
+          ? []
+          : await _db
+              .from('rooms')
+              .select('id, room_number')
+              .inFilter('id', roomIds);
 
+      final tenantMap = <String, Map<String, dynamic>>{};
+      for (final t in (tenantRows as List)) {
+        tenantMap[t['id'].toString()] = t as Map<String, dynamic>;
+      }
       final roomMap = <String, String>{};
-      for (final r in (rooms as List)) {
-        if (r['tenant_id'] != null) {
-          roomMap[r['tenant_id']] = r['room_number'] ?? '';
-        }
+      for (final r in (roomRows as List)) {
+        roomMap[r['id'].toString()] = r['room_number']?.toString() ?? '-';
       }
 
       final result = <Map<String, String>>[];
+      for (final m in memberRows) {
+        final userId = m['user_id']?.toString() ?? '';
+        final roomId = m['room_id']?.toString() ?? '';
+        final tenant = tenantMap[userId];
+        final name = tenant?['full_name']?.toString() ?? '';
+        if (name.isEmpty) continue;
 
-      for (final t in (tenants as List)) {
+        final phone = tenant?['phone']?.toString() ?? '';
+
         result.add({
-          'name':   t['full_name'] ?? '',
-          'room':   roomMap[t['id']] ?? '-',
-          'role':   'ผู้เช่าหลัก',
-          'phone':  t['phone']?.toString() ?? '',
-          'status': t['status'] ?? '',
+          'userId': userId,
+          'name': name,
+          'room': roomMap[roomId] ?? '-',
+          'role': 'ผู้เช่าหลัก',
+          'phone': phone,
+          'status': 'กำลังเช่า',
         });
       }
-      for (final r in (roommates as List)) {
-        result.add({
-          'name':   r['full_name'] ?? '',
-          'room':   roomMap[r['tenant_id']] ?? '-',
-          'role':   'Roommate',
-          'phone':  r['phone']?.toString() ?? '',
-          'status': r['status'] ?? '',
-        });
-      }
+
+      result.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
 
       if (result.isEmpty) return _fallbackTenantList();
       return result;
@@ -301,32 +375,40 @@ class MockService {
       ];
 
   // ── ประกาศ ───────────────────────────────────────────────
-  Future<List<Map<String, String>>> getAnnouncements({String? dormitoryId}) async {
+  /// [status] = 'published' | 'draft' | null (ทั้งหมด)
+  Future<List<Map<String, String>>> getAnnouncements({
+    String? dormitoryId,
+    String? status,
+  }) async {
     try {
       dynamic query = _db
           .from('announcements')
-          .select('id, title, content, image_url, created_at');
+          .select('id, title, content, image_url, created_at, status');
 
       if (dormitoryId != null) {
         query = query.eq('dormitory_id', dormitoryId);
       }
+      if (status != null) {
+        query = query.eq('status', status);
+      }
 
       query = query
           .order('created_at', ascending: false)
-          .limit(10);
+          .limit(50);
 
       final rows = await query;
 
-      if ((rows as List).isEmpty) return _fallbackAnnouncements();
-      return rows.map<Map<String, String>>((r) => {
-        'id':      r['id'] ?? '',
-        'title':   r['title'] ?? '',
-        'content': r['content'] ?? '',
-        'image':   r['image_url'] ?? 'assets/images/announcement_1.png',
-        'date':    _formatDate(r['created_at']),
+      return (rows as List).map<Map<String, String>>((r) => {
+        'id':      r['id']?.toString() ?? '',
+        'title':   r['title']?.toString() ?? '',
+        'content': r['content']?.toString() ?? '',
+        'image':   r['image_url']?.toString() ?? '',
+        'status':  r['status']?.toString() ?? 'published',
+        'date':    _formatDate(r['created_at']?.toString()),
       }).toList();
-    } catch (_) {
-      return _fallbackAnnouncements();
+    } catch (e) {
+      print('❌ getAnnouncements error: $e');
+      return [];
     }
   }
 
@@ -399,6 +481,149 @@ class MockService {
         {'label': 'อื่นๆ',    'amount': bill['penalty']      ?? 0},
       ],
     };
+  }
+
+  // ── สร้างบิลใหม่ (admin) ─────────────────────────────────
+  /// บันทึกบิลลงตาราง bills + อัปโหลดรูป QR (ถ้ามี)
+  /// คืน true เมื่อสำเร็จ
+  Future<bool> createBill({
+    required String tenantId,
+    required String tenantName,
+    required String room,
+    required String? dormitoryId,
+    required String month,
+    required int rent,
+    required int electricity,
+    required int water,
+    required int total,
+    required String dueDate, // รูปแบบ ISO: yyyy-MM-dd
+    Uint8List? qrBytes,
+    String? qrFileName,
+  }) async {
+    try {
+      final uid = _db.auth.currentUser?.id;
+
+      // 1) อัปโหลดรูป QR ถ้ามี
+      String? qrUrl;
+      if (qrBytes != null) {
+        final ext = (qrFileName != null && qrFileName.contains('.'))
+            ? qrFileName.split('.').last
+            : 'png';
+        final path =
+            'qr/${DateTime.now().millisecondsSinceEpoch}_$tenantId.$ext';
+        await _db.storage.from('dormitory-images').uploadBinary(
+              path,
+              qrBytes,
+              fileOptions: const FileOptions(upsert: true),
+            );
+        qrUrl = _db.storage.from('dormitory-images').getPublicUrl(path);
+      }
+
+      // 2) insert แถวบิล
+      await _db.from('bills').insert({
+        'tenant_id': tenantId,
+        'tenant_name': tenantName,
+        'room': room,
+        'dormitory_id': dormitoryId,
+        'month': month,
+        'rent': rent,
+        'electricity': electricity,
+        'water': water,
+        'penalty': 0,
+        'total': total,
+        'due_date': dueDate,
+        'status': 'pending',
+        'qr_image_url': qrUrl,
+        'created_by': uid,
+      });
+      return true;
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ createBill error: $e');
+      return false;
+    }
+  }
+
+  // ── รายการบิลทั้งหมดในหอพัก (admin) ──────────────────────
+  Future<List<Map<String, dynamic>>> getBills({String? dormitoryId}) async {
+    try {
+      dynamic q = _db.from('bills').select(
+          'id, tenant_id, tenant_name, room, month, rent, electricity, water, penalty, total, due_date, status, qr_image_url, created_at');
+      if (dormitoryId != null) {
+        q = q.eq('dormitory_id', dormitoryId);
+      }
+      q = q.order('created_at', ascending: false);
+      final rows = await q;
+
+      return (rows as List).map<Map<String, dynamic>>((r) {
+        return {
+          'id': r['id']?.toString() ?? '',
+          'tenantId': r['tenant_id']?.toString() ?? '',
+          'tenantName': r['tenant_name']?.toString() ?? '-',
+          'room': r['room']?.toString() ?? '-',
+          'month': r['month']?.toString() ?? '',
+          'rent': r['rent'] ?? 0,
+          'electricity': r['electricity'] ?? 0,
+          'water': r['water'] ?? 0,
+          'total': r['total'] ?? 0,
+          'dueDate': _formatThaiDate(r['due_date']?.toString()),
+          'status': r['status']?.toString() ?? 'pending',
+          'statusLabel': _billStatusLabel(r['status']?.toString()),
+          'qrImageUrl': r['qr_image_url']?.toString() ?? '',
+        };
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── สรุปจำนวนบิลตามสถานะ (admin) ─────────────────────────
+  Future<Map<String, int>> getBillStats({String? dormitoryId}) async {
+    try {
+      dynamic q = _db.from('bills').select('status');
+      if (dormitoryId != null) {
+        q = q.eq('dormitory_id', dormitoryId);
+      }
+      final rows = await q;
+      int pending = 0, review = 0, paid = 0;
+      for (final r in (rows as List)) {
+        switch (r['status']?.toString()) {
+          case 'pending':
+            pending++;
+            break;
+          case 'review':
+            review++;
+            break;
+          case 'paid':
+            paid++;
+            break;
+        }
+      }
+      return {'pending': pending, 'review': review, 'paid': paid};
+    } catch (_) {
+      return {'pending': 0, 'review': 0, 'paid': 0};
+    }
+  }
+
+  // แปลงวันที่ ISO (yyyy-MM-dd, ปีอาจเป็น พ.ศ.) → "5 สิงหาคม 2569"
+  String _formatThaiDate(String? iso) {
+    if (iso == null || iso.isEmpty) return '-';
+    try {
+      final parts = iso.split('-');
+      if (parts.length != 3) return iso;
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      const months = [
+        'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+        'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+      ];
+      // ถ้าปีเป็น ค.ศ. แปลงเป็น พ.ศ.
+      final buddhistYear = year < 2500 ? year + 543 : year;
+      return '$day ${months[(month - 1) % 12]} $buddhistYear';
+    } catch (_) {
+      return iso;
+    }
   }
 }
 

@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+enum ApprovalResult { approved, rejected }
+
 class AlreadyApprovedScreen extends StatelessWidget {
   final VoidCallback onPressed;
+  final ApprovalResult result;
 
   const AlreadyApprovedScreen({
     super.key,
     required this.onPressed,
+    this.result = ApprovalResult.approved,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isApproved = result == ApprovalResult.approved;
+
     return Column(
       children: [
         // ---- Illustration ----
@@ -18,17 +24,19 @@ class AlreadyApprovedScreen extends StatelessWidget {
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: SvgPicture.asset(
-                  'assets/images/Celebrat.svg',
-                  fit: BoxFit.contain,
-                ),
+              child: SvgPicture.asset(
+                isApproved ? 'assets/images/Celebrat.svg' : 'assets/images/time.svg',
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ),
 
-        // ---- กรอบสีน้ำเงิน ----
-        SizedBox(
-          height: 322,
+        // ---- กรอบสีฟ้า ----
+        // ใช้ minHeight แทนความสูงตายตัว เพราะข้อความกรณีปฏิเสธมี 3 บรรทัด
+        // (กรณีอนุมัติมี 2 บรรทัด) ถ้ากำหนด height ตายตัวจะล้นกรอบ
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 322),
           child: Container(
             width: double.infinity,
             decoration: const BoxDecoration(
@@ -41,21 +49,24 @@ class AlreadyApprovedScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 40, 16, 48),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'ได้รับการอนุมัติแล้ว',
+                  Text(
+                    isApproved ? 'อนุมัติเรียบร้อย' : 'ปฏิเสธคำขอ',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFFFEFFAF),
                     ),
                   ),
                   const SizedBox(height: 60),
-                  const Text(
-                    'คำขอเข้าหอพักของคุณได้รับการอนุมัติ\nคุณสามารถเริ่มต้นใช้งานแอปได้แล้ว',
+                  Text(
+                    isApproved
+                        ? 'คำขอเข้าหอพักของคุณได้รับการอนุมัติ\nคุณสามารถเข้าใช้งานแอปได้แล้ว'
+                        : 'คำขอเข้าหอพักของคุณได้รับการปฏิเสธ\nคุณไม่สามารถเข้าใช้งานแอปได้\nกรุณาติดต่อแอดมิน',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       color: Color(0xFF000000),
                       height: 1.6,
@@ -73,9 +84,9 @@ class AlreadyApprovedScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        'เข้าสู่แอป',
-                        style: TextStyle(
+                      child: Text(
+                        isApproved ? 'เข้าสู่แอป' : 'กลับหน้าสมัคร',
+                        style: const TextStyle(
                           fontFamily: 'Prompt',
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
