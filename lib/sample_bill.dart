@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'services/mock_service.dart';
 
+import 'widgets/app_sizes.dart';
 /// หน้าตัวอย่างบิล — แสดงสรุปบิลก่อนส่งให้ผู้เช่า
 class SampleBillScreen extends StatefulWidget {
   /// ข้อมูลบิลที่ส่งมาจากหน้า build_tenant_bill
@@ -95,27 +96,16 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
   Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.maybePop(context),
-            child: const Icon(Icons.chevron_left,
-                size: 28, color: Color(0xFF1A1A2E)),
+      child: const Center(
+        child: Text(
+          'ตัวอย่างบิล',
+          style: TextStyle(
+            fontFamily: 'Noto Sans Thai',
+            fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A2E),
           ),
-          const Expanded(
-            child: Center(
-              child: Text(
-                'ตัวอย่างบิล',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  color: Color(0xFF1A1A2E),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 28),
-        ],
+        ),
       ),
     );
   }
@@ -146,7 +136,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
             errorBuilder: (_, _, _) => const Text(
               'StayEase',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF4F8FDB),
@@ -179,7 +169,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
               const Text(
                 'รวมทั้งสิ้น',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF1A1A2E),
@@ -188,7 +178,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
               Text(
                 '${_fmt(_grandTotal)} บาท',
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF1A1A2E),
@@ -208,7 +198,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
           const Text(
             'ขอบคุณที่ใช้บริการ StayEase',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 13,
               color: Color(0xFF888888),
             ),
@@ -231,7 +221,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
           const Text(
             'QR PromptPay',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 11,
               color: Color(0xFF888888),
             ),
@@ -257,7 +247,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
           Text(
             'QR PromptPay',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 10,
               color: Color(0xFFAAAAAA),
             ),
@@ -278,7 +268,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
           child: Text(
             label,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               color: Color(0xFF555555),
             ),
@@ -289,7 +279,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
             value,
             textAlign: valueAlign,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1A1A2E),
@@ -308,7 +298,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
         Text(
           label,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             color: Color(0xFF333333),
           ),
@@ -316,7 +306,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
         Text(
           '${_fmt(amount)} บาท',
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
@@ -363,6 +353,10 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
       dueDate: dueIso,
       qrBytes: _qrBytes,
       qrFileName: billData['qrFileName']?.toString(),
+      electricMeterPrev: billData['electricPrev']?.toString(),
+      electricMeterCurr: billData['electricCurrent']?.toString(),
+      waterMeterPrev: billData['waterPrev']?.toString(),
+      waterMeterCurr: billData['waterCurrent']?.toString(),
     );
 
     if (!mounted) return;
@@ -381,7 +375,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
       SnackBar(
         content: Text(
           msg,
-          style: const TextStyle(fontFamily: 'Prompt'),
+          style: const TextStyle(fontFamily: 'Noto Sans Thai'),
         ),
         backgroundColor:
             isError ? const Color(0xFFD32F2F) : const Color(0xFF4CAF50),
@@ -393,7 +387,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
   // ---- ปุ่มล่าง: แก้ไข / ส่ง ----
   Widget _buildBottomButtons(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Row(
         children: [
           Expanded(
@@ -412,7 +406,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
                 child: const Text(
                   'แก้ไข',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 16,
                     color: Color(0xFF4F8FDB),
                   ),
@@ -446,7 +440,7 @@ class _SampleBillScreenState extends State<SampleBillScreen> {
                     : const Text(
                         'ส่ง',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,

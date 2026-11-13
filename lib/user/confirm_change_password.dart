@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
+import '../widgets/keyboard_safe_scroll.dart';
+
 class ConfirmChangePasswordScreen extends StatefulWidget {
   final VoidCallback? onBack;
-  final VoidCallback? onSave;
 
-  const ConfirmChangePasswordScreen({
-    super.key,
-    this.onBack,
-    this.onSave,
-  });
+  /// ส่งรหัสผ่านใหม่ออกไปให้ main.dart เรียก changePassword
+  final ValueChanged<String>? onSave;
+
+  const ConfirmChangePasswordScreen({super.key, this.onBack, this.onSave});
 
   @override
   State<ConfirmChangePasswordScreen> createState() =>
@@ -53,16 +54,14 @@ class _ConfirmChangePasswordScreenState
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
+              child: KeyboardSafeScroll(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                child: Column(
+                content: Column(
                   children: [
                     // Lock icon
                     SvgPicture.asset(
@@ -76,7 +75,7 @@ class _ConfirmChangePasswordScreenState
                     const Text(
                       'ตั้งรหัสผ่านใหม่',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -86,7 +85,7 @@ class _ConfirmChangePasswordScreenState
                     Text(
                       'รหัสผ่านควรมีความปลอดภัย',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Colors.black.withValues(alpha: 0.35),
                       ),
@@ -99,7 +98,7 @@ class _ConfirmChangePasswordScreenState
                       child: Text(
                         'รหัสผ่านใหม่',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFF000000),
                         ),
@@ -113,33 +112,35 @@ class _ConfirmChangePasswordScreenState
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-Container(
-                               decoration: BoxDecoration(
-                                 color: Colors.white,
-                                 borderRadius: BorderRadius.circular(16),
-                                 border: Border.all(
-                                   color: const Color(0xFFD9D9D9),
-                                   width: 1,
-                                 ),
-                               ),
-                               child: TextField(
-                                 controller: _newPasswordController,
-                                 obscureText: _obscureNew,
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFD9D9D9),
+                                  width: 1,
+                                ),
+                              ),
+                              child: TextField(
+                                controller: _newPasswordController,
+                                obscureText: _obscureNew,
                                 style: const TextStyle(
-                                  fontFamily: 'Prompt',
+                                  fontFamily: 'Noto Sans Thai',
                                   fontSize: 14,
                                   color: Color(0xFF000000),
                                 ),
                                 decoration: InputDecoration(
                                   hintText: 'กรุณากรอกรหัสผ่าน',
                                   hintStyle: const TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 15,
                                     color: Color(0xFFD9D9D9),
                                   ),
                                   border: InputBorder.none,
                                   contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
                                   suffixIcon: IconButton(
                                     icon: Icon(
                                       _obscureNew
@@ -149,7 +150,8 @@ Container(
                                       size: 20,
                                     ),
                                     onPressed: () => setState(
-                                        () => _obscureNew = !_obscureNew),
+                                      () => _obscureNew = !_obscureNew,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -165,14 +167,16 @@ Container(
                                   barColor = strength == 1
                                       ? Colors.red
                                       : strength == 2
-                                          ? Colors.orange
-                                          : Colors.green;
+                                      ? Colors.orange
+                                      : Colors.green;
                                 } else {
                                   barColor = const Color(0xFFD9D9D9);
                                 }
                                 return Expanded(
                                   child: Container(
-                                    margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                                    margin: EdgeInsets.only(
+                                      right: i < 2 ? 4 : 0,
+                                    ),
                                     height: 4,
                                     decoration: BoxDecoration(
                                       color: barColor,
@@ -188,16 +192,16 @@ Container(
                                 strength == 1
                                     ? 'ความปลอดภัยต่ำ'
                                     : strength == 2
-                                        ? 'ความปลอดภัย'
-                                        : 'ความปลอดภัยสูง',
+                                    ? 'ความปลอดภัย'
+                                    : 'ความปลอดภัยสูง',
                                 style: TextStyle(
-                                  fontFamily: 'Prompt',
+                                  fontFamily: 'Noto Sans Thai',
                                   fontSize: 11,
                                   color: strength == 1
                                       ? Colors.red
                                       : strength == 2
-                                          ? Colors.orange
-                                          : Colors.green,
+                                      ? Colors.orange
+                                      : Colors.green,
                                 ),
                               ),
                           ],
@@ -212,7 +216,7 @@ Container(
                       child: Text(
                         'ยืนยันรหัสผ่านใหม่',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFF000000),
                         ),
@@ -225,34 +229,36 @@ Container(
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-Container(
-                               decoration: BoxDecoration(
-                                 color: Colors.white,
-                                 borderRadius: BorderRadius.circular(16),
-                                 border: Border.all(
-                                   color: const Color(0xFFD9D9D9),
-                                   width: 1,
-                                 ),
-                               ),
-                               child: TextField(
-                                 controller: _confirmPasswordController,
-                                 obscureText: _obscureConfirm,
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFD9D9D9),
+                                  width: 1,
+                                ),
+                              ),
+                              child: TextField(
+                                controller: _confirmPasswordController,
+                                obscureText: _obscureConfirm,
                                 onChanged: (_) => setState(() {}),
                                 style: const TextStyle(
-                                  fontFamily: 'Prompt',
+                                  fontFamily: 'Noto Sans Thai',
                                   fontSize: 14,
                                   color: Color(0xFF000000),
                                 ),
                                 decoration: InputDecoration(
                                   hintText: 'กรุณากรอกรหัสผ่าน',
                                   hintStyle: const TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 15,
                                     color: Color(0xFFD9D9D9),
                                   ),
                                   border: InputBorder.none,
                                   contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
                                   suffixIcon: IconButton(
                                     icon: Icon(
                                       _obscureConfirm
@@ -261,8 +267,9 @@ Container(
                                       color: const Color(0xFFAAAAAA),
                                       size: 20,
                                     ),
-                                    onPressed: () => setState(() =>
-                                        _obscureConfirm = !_obscureConfirm),
+                                    onPressed: () => setState(
+                                      () => _obscureConfirm = !_obscureConfirm,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -286,7 +293,7 @@ Container(
                                         ? 'รหัสผ่านปลอดภัย'
                                         : 'รหัสผ่านไม่ตรงกัน',
                                     style: TextStyle(
-                                      fontFamily: 'Prompt',
+                                      fontFamily: 'Noto Sans Thai',
                                       fontSize: 11,
                                       color: _isPasswordMatch
                                           ? Colors.green
@@ -301,32 +308,34 @@ Container(
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            // บันทึก button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _canSave ? widget.onSave : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F8FDB),
-                    disabledBackgroundColor:
-                        const Color(0xFF4F8FDB).withValues(alpha: 0.4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'บันทึก',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 16,
-                      color: Colors.white,
+                bottom: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _canSave
+                          ? () =>
+                                widget.onSave?.call(_newPasswordController.text)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4F8FDB),
+                        disabledBackgroundColor: const Color(
+                          0xFF4F8FDB,
+                        ).withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'บันทึก',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -347,7 +356,7 @@ Container(
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -356,8 +365,9 @@ Container(
               child: Text(
                 'เปลี่ยนรหัสผ่าน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

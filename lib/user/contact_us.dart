@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/app_sizes.dart';
 class ContactUsScreen extends StatelessWidget {
   final VoidCallback? onBack;
 
@@ -40,7 +41,7 @@ class ContactUsScreen extends StatelessWidget {
                                 Text(
                                   'เราพร้อมช่วยเหลือคุณ!',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF000000),
@@ -50,7 +51,7 @@ class ContactUsScreen extends StatelessWidget {
                                 Text(
                                   'หากคุณพบปัญหาหรือ\nมีข้อสงสัย สามารถติดต่อเรา\nได้ผ่านช่องทางด้านล่าง',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 14,
                                     color: Color(0xFF666666),
                                     height: 1.5,
@@ -87,7 +88,7 @@ class ContactUsScreen extends StatelessWidget {
                       child: Text(
                         'ช่องทางการติดต่อ',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF000000),
@@ -156,7 +157,7 @@ class ContactUsScreen extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 14,
                 color: Color(0xFF000000),
               ),
@@ -176,7 +177,7 @@ class ContactUsScreen extends StatelessWidget {
             onTap: onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -185,8 +186,9 @@ class ContactUsScreen extends StatelessWidget {
               child: Text(
                 'ติดต่อเรา',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

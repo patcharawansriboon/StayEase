@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class DeletionFailedScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onContactAdmin;
@@ -42,7 +43,7 @@ class DeletionFailedScreen extends StatelessWidget {
                     const Text(
                       'ยังไม่สามารถปิดบัญชีได้',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -52,7 +53,7 @@ class DeletionFailedScreen extends StatelessWidget {
                     Text.rich(
                       TextSpan(
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFF888888),
                           height: 1.6,
@@ -80,12 +81,12 @@ class DeletionFailedScreen extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
               child: SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: onContactAdmin,
+                  onPressed: onBackToSettings ?? onBack,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4F8FDB),
                     shape: RoundedRectangleBorder(
@@ -94,36 +95,11 @@ class DeletionFailedScreen extends StatelessWidget {
                     elevation: 0,
                   ),
                   child: const Text(
-                    'ติดต่อแอดมิน',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton(
-                  onPressed: onBackToSettings ?? onBack,
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF4F8FDB)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text(
                     'กลับไปหน้าตั้งค่า',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 16,
-                      color: Color(0xFF4F8FDB),
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -144,7 +120,7 @@ class DeletionFailedScreen extends StatelessWidget {
             onTap: onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),

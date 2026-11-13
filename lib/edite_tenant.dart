@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../change_status.dart';
+
+import 'widgets/app_sizes.dart';
+import 'widgets/keyboard_safe_scroll.dart';
 
 class EditeTenantScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -23,10 +25,10 @@ class EditeTenantScreen extends StatefulWidget {
   });
 
   @override
-  State<EditeTenantScreen> createState() => _EditeTenantScreenState();
+  State<EditeTenantScreen> createState() => EditeTenantScreenState();
 }
 
-class _EditeTenantScreenState extends State<EditeTenantScreen> {
+class EditeTenantScreenState extends State<EditeTenantScreen> {
   final _buildingController = TextEditingController();
   final _roomController = TextEditingController();
   final _floorController = TextEditingController();
@@ -48,6 +50,8 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   String _pGender = '';
   // เอกสารแนบ (ชื่อไฟล์ + url) ที่ผู้เช่าอัปโหลด
   List<Map<String, String>> _documents = [];
+  // url ของเอกสารที่ถูกกดลบ (รอลบไฟล์จริง + บันทึกตอนกดบันทึก)
+  final List<String> _removedDocumentUrls = [];
 
   @override
   void initState() {
@@ -55,6 +59,21 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
     if (widget.currentStatus != null) {
       _status = widget.currentStatus!;
     }
+    _loadExistingRental();
+  }
+
+  @override
+  void didUpdateWidget(covariant EditeTenantScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // เปลี่ยนผู้เช่าที่เลือก → ต้องโหลดข้อมูลเดิมมาใหม่ (ไม่ใช้ค่าค้างของคนก่อน)
+    if (oldWidget.memberId != widget.memberId) {
+      _tenantUserId = null;
+      _loadExistingRental();
+    }
+  }
+
+  /// โหลดข้อมูลการเช่าเดิมใหม่ (เรียกจากภายนอกเมื่อกลับมาหน้านี้)
+  void refresh() {
     _loadExistingRental();
   }
 
@@ -77,16 +96,24 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
       final rental = await db
           .from('tenant_rentals')
           .select(
-              'building, room_number, floor, check_in_date, check_out_date, rent, deposit, id_card, birthdate, gender, address, emergency_contact, emergency_phone, documents')
+            'building, room_number, floor, check_in_date, check_out_date, rent, deposit, id_card, birthdate, gender, address, emergency_contact, emergency_phone, documents',
+          )
           .eq('member_id', userId)
           .maybeSingle();
 
-      // 3) ชื่อ-นามสกุล + เบอร์ จากตาราง tenants
-      final tenant = await db
+      // 3) ชื่อ-นามสกุล + เบอร์ จากตาราง tenants (Roommate → roommate_invites)
+      var tenant = await db
           .from('tenants')
           .select('full_name, phone')
           .eq('id', userId)
           .maybeSingle();
+      if (tenant == null) {
+        tenant = await db
+            .from('roommate_invites')
+            .select('full_name, phone')
+            .eq('id', userId)
+            .maybeSingle();
+      }
 
       if (!mounted) return;
       setState(() {
@@ -94,10 +121,8 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           _buildingController.text = rental['building']?.toString() ?? '';
           _roomController.text = rental['room_number']?.toString() ?? '';
           _floorController.text = rental['floor']?.toString() ?? '';
-          _checkInController.text =
-              rental['check_in_date']?.toString() ?? '';
-          _checkOutController.text =
-              rental['check_out_date']?.toString() ?? '';
+          _checkInController.text = rental['check_in_date']?.toString() ?? '';
+          _checkOutController.text = rental['check_out_date']?.toString() ?? '';
           _rentController.text = rental['rent']?.toString() ?? '';
           _depositController.text = rental['deposit']?.toString() ?? '';
 
@@ -117,27 +142,132 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   // แปลงข้อความเอกสาร "ชื่อ|url" บรรทัดละ 1 รายการ → list
   List<Map<String, String>> _parseDocuments(String raw) {
     if (raw.trim().isEmpty) return [];
-    return raw
-        .split('\n')
-        .where((e) => e.trim().isNotEmpty)
-        .map((line) {
-          final parts = line.split('|');
-          return {
-            'title': parts[0].trim(),
-            'url': parts.length > 1 ? parts[1].trim() : '',
-          };
+    return raw.split('\n').where((e) => e.trim().isNotEmpty).map((line) {
+      final parts = line.split('|');
+      return {
+        'title': parts[0].trim(),
+        'url': parts.length > 1 ? parts[1].trim() : '',
+      };
+    }).toList();
+  }
+
+  // รวมรายการเอกสารกลับเป็นข้อความ "ชื่อ|url" บรรทัดละ 1 รายการ
+  String _documentsToString() {
+    return _documents
+        .map((d) {
+          final title = d['title'] ?? 'เอกสาร';
+          final url = d['url'] ?? '';
+          return url.isEmpty ? title : '$title|$url';
         })
-        .toList();
+        .join('\n');
+  }
+
+  /// ลบไฟล์เอกสารออกจาก Supabase Storage
+  Future<void> _deleteFileFromStorage(String url) async {
+    if (url.isEmpty) return;
+    const marker = 'dormitory-images/';
+    final idx = url.indexOf(marker);
+    if (idx == -1) return;
+    final path = url.substring(idx + marker.length);
+    if (path.isEmpty) return;
+    try {
+      await Supabase.instance.client.storage.from('dormitory-images').remove([
+        path,
+      ]);
+    } catch (e) {
+      print('❌ delete document file error: $e');
+    }
+  }
+
+  /// กดลบเอกสารแนบของผู้เช่า (รอลบไฟล์จริง + บันทึกตอนกดบันทึก)
+  Future<void> _deleteDocument(int index) async {
+    final doc = _documents[index];
+    final title = doc['title'] ?? 'เอกสาร';
+    final url = doc['url'] ?? '';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'ลบเอกสารแนบ',
+          style: TextStyle(
+            fontFamily: 'Noto Sans Thai',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'ต้องการลบ "$title" ของผู้เช่าใช่หรือไม่?',
+          style: const TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Color(0xFFAAAAAA),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF0303),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            child: const Text(
+              'ลบ',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _documents.removeAt(index);
+      if (url.isNotEmpty) _removedDocumentUrls.add(url);
+    });
   }
 
   final List<String> _months = [
-    'ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย',
-    'ก.ค', 'ส.ค', 'ก.ย', 'ต.ค', 'พ.ย', 'ธ.ค'
+    'ม.ค',
+    'ก.พ',
+    'มี.ค',
+    'เม.ย',
+    'พ.ค',
+    'มิ.ย',
+    'ก.ค',
+    'ส.ค',
+    'ก.ย',
+    'ต.ค',
+    'พ.ย',
+    'ธ.ค',
   ];
 
   final List<String> _monthsFull = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    'มกราคม',
+    'กุมภาพันธ์',
+    'มีนาคม',
+    'เมษายน',
+    'พฤษภาคม',
+    'มิถุนายน',
+    'กรกฎาคม',
+    'สิงหาคม',
+    'กันยายน',
+    'ตุลาคม',
+    'พฤศจิกายน',
+    'ธันวาคม',
   ];
 
   int _selectedDay = 1;
@@ -183,7 +313,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
@@ -198,19 +328,24 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedDay - 1),
+                              initialItem: _selectedDay - 1,
+                            ),
                             itemExtent: 40,
                             looping: true,
-                            onSelectedItemChanged: (i) =>
-                                setModalState(() => _selectedDay = (i % 31) + 1),
-                            children: List.generate(31,
-                                (i) => _pickerItem('${i + 1}')),
+                            onSelectedItemChanged: (i) => setModalState(
+                              () => _selectedDay = (i % 31) + 1,
+                            ),
+                            children: List.generate(
+                              31,
+                              (i) => _pickerItem('${i + 1}'),
+                            ),
                           ),
                         ),
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedMonth),
+                              initialItem: _selectedMonth,
+                            ),
                             itemExtent: 40,
                             looping: true,
                             onSelectedItemChanged: (i) =>
@@ -223,14 +358,17 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedYear - 2540),
+                              initialItem: _selectedYear - 2540,
+                            ),
                             itemExtent: 40,
                             looping: true,
-                            onSelectedItemChanged: (i) =>
-                                setModalState(() => _selectedYear = (i % 30) + 2540),
+                            onSelectedItemChanged: (i) => setModalState(
+                              () => _selectedYear = (i % 30) + 2540,
+                            ),
                             children: List.generate(
-                                30,
-                                (i) => _pickerItem('${i + 2540}')),
+                              30,
+                              (i) => _pickerItem('${i + 2540}'),
+                            ),
                           ),
                         ),
                       ],
@@ -250,7 +388,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
       child: Text(
         text,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 16,
           color: Color(0xFF000000),
         ),
@@ -273,14 +411,14 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildHeader(),
           Expanded(
-            child: SingleChildScrollView(
+            child: KeyboardSafeScroll(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              child: Column(
+              content: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildProfile(),
@@ -292,9 +430,9 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                   _buildDocumentSection(),
                 ],
               ),
+              bottom: _buildBottomButton(),
             ),
           ),
-          _buildBottomButton(),
         ],
       ),
     );
@@ -315,7 +453,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
             const Text(
               'พัชราวรรณ  ศรีบุญ',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF000000),
@@ -323,8 +461,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
             ),
             const SizedBox(height: 4),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: const Color(0xFFE9F7EC),
                 borderRadius: BorderRadius.circular(20),
@@ -332,7 +469,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
               child: const Text(
                 'ผู้เช่าหลัก',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 11,
                   color: Color(0xFF4CAF50),
                 ),
@@ -370,48 +507,24 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildLabel('สถานะ'),
-          GestureDetector(
-            onTap: () {
-              Navigator.push<String>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChangeStatusScreen(
-                    currentStatus: _status,
-                    onBack: () => Navigator.pop(context),
-                    onConfirm: (newStatus) {
-                      Navigator.pop(context, newStatus);
-                    },
-                  ),
-                ),
-              ).then((result) {
-                if (result != null) {
-                  setState(() => _status = result);
-                }
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.only(bottom: 8),
-              decoration: const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFD9D9D9)),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _status,
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 14,
-                        color: Color(0xFF000000),
-                      ),
+          Container(
+            padding: const EdgeInsets.only(bottom: 8),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFD9D9D9))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _status,
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans Thai',
+                      fontSize: 14,
+                      color: Color(0xFF000000),
                     ),
                   ),
-                  Icon(Icons.chevron_right,
-                      size: 20, color: Color(0xFF999999)),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -428,11 +541,18 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           GestureDetector(
             onTap: () => _showDatePicker(_checkInController),
             child: AbsorbPointer(
-              child: _buildUnderlineInput(_checkInController, 'กรุณากรอกวันที่เริ่มสัญญา',
-                  suffixIcon: GestureDetector(
-                    onTap: () => _showDatePicker(_checkInController),
-                    child: const Icon(Icons.calendar_month_outlined, size: 18, color: Color(0xFF999999)),
-                  )),
+              child: _buildUnderlineInput(
+                _checkInController,
+                'กรุณากรอกวันที่เริ่มสัญญา',
+                suffixIcon: GestureDetector(
+                  onTap: () => _showDatePicker(_checkInController),
+                  child: const Icon(
+                    Icons.calendar_month_outlined,
+                    size: 18,
+                    color: Color(0xFF999999),
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -440,11 +560,18 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           GestureDetector(
             onTap: () => _showDatePicker(_checkOutController),
             child: AbsorbPointer(
-              child: _buildUnderlineInput(_checkOutController, 'กรุณากรอกวันที่หมดสัญญา',
-                  suffixIcon: GestureDetector(
-                    onTap: () => _showDatePicker(_checkOutController),
-                    child: const Icon(Icons.calendar_month_outlined, size: 18, color: Color(0xFF999999)),
-                  )),
+              child: _buildUnderlineInput(
+                _checkOutController,
+                'กรุณากรอกวันที่หมดสัญญา',
+                suffixIcon: GestureDetector(
+                  onTap: () => _showDatePicker(_checkOutController),
+                  child: const Icon(
+                    Icons.calendar_month_outlined,
+                    size: 18,
+                    color: Color(0xFF999999),
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -455,8 +582,11 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildLabelWithUnit('ค่าเช่า', '(บาท/เดือน)'),
-                    _buildUnderlineInput(_rentController, '0000.00 บาท',
-                        textAlign: TextAlign.right),
+                    _buildUnderlineInput(
+                      _rentController,
+                      '0000.00 บาท',
+                      textAlign: TextAlign.right,
+                    ),
                   ],
                 ),
               ),
@@ -466,8 +596,11 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildLabelWithUnit('เงินประกัน', '(บาท)'),
-                    _buildUnderlineInput(_depositController, '0000.00 บาท',
-                        textAlign: TextAlign.right),
+                    _buildUnderlineInput(
+                      _depositController,
+                      '0000.00 บาท',
+                      textAlign: TextAlign.right,
+                    ),
                   ],
                 ),
               ),
@@ -486,7 +619,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           ? const Text(
               'ยังไม่มีเอกสารแนบ',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 color: Color(0xFF999999),
               ),
@@ -499,6 +632,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                   _buildDocRow(
                     _documents[i]['title'] ?? 'เอกสาร',
                     _documents[i]['url'] ?? '',
+                    i,
                   ),
                 ],
               ],
@@ -506,7 +640,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
     );
   }
 
-  Widget _buildDocRow(String title, String url) {
+  Widget _buildDocRow(String title, String url, int index) {
     return GestureDetector(
       onTap: url.isEmpty ? null : () => _previewDocument(title, url),
       child: Container(
@@ -518,8 +652,11 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
         ),
         child: Row(
           children: [
-            SvgPicture.asset('assets/images/icon_document.svg',
-                width: 24, height: 24),
+            SvgPicture.asset(
+              'assets/images/icon_document.svg',
+              width: 24,
+              height: 24,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -527,15 +664,36 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 14,
                   color: Color(0xFF000000),
                 ),
               ),
             ),
             if (url.isNotEmpty)
-              const Icon(Icons.visibility_outlined,
-                  size: 18, color: Color(0xFF4F8FDB)),
+              const Icon(
+                Icons.visibility_outlined,
+                size: 18,
+                color: Color(0xFF4F8FDB),
+              ),
+            const SizedBox(width: 8),
+            // ปุ่มลบเอกสารแนบของผู้เช่า
+            GestureDetector(
+              onTap: () => _deleteDocument(index),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDECEA),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.delete_outline,
+                  size: 16,
+                  color: Color(0xFFE53935),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -560,7 +718,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                     child: Text(
                       title,
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 14,
                         color: Colors.white,
                       ),
@@ -583,7 +741,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                     child: Text(
                       'ไม่สามารถแสดงไฟล์นี้ได้',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         color: Colors.white,
                       ),
                     ),
@@ -612,7 +770,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           Text(
             title,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: Color(0xFF4181CB),
@@ -631,7 +789,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
       child: Text(
         text,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 14,
           color: Color(0xFF000000),
         ),
@@ -645,7 +803,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
       child: Text.rich(
         TextSpan(
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             color: Color(0xFF000000),
           ),
@@ -653,10 +811,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
             TextSpan(text: '$text '),
             TextSpan(
               text: unit,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF999999),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
             ),
           ],
         ),
@@ -673,7 +828,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           Text(
             label,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 13,
               color: Color(0xFF999999),
             ),
@@ -691,7 +846,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
             child: Text(
               value,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 14,
                 color: Color(0xFF555555),
               ),
@@ -712,22 +867,24 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
       controller: controller,
       textAlign: textAlign,
       style: const TextStyle(
-        fontFamily: 'Prompt',
+        fontFamily: 'Noto Sans Thai',
         fontSize: 14,
         color: Color(0xFF000000),
       ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 14,
           color: Color(0xFFCCCCCC),
         ),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(vertical: 6),
         suffixIcon: suffixIcon,
-        suffixIconConstraints:
-            const BoxConstraints(minWidth: 24, minHeight: 24),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 24,
+          minHeight: 24,
+        ),
         enabledBorder: const UnderlineInputBorder(
           borderSide: BorderSide(color: Color(0xFFD9D9D9)),
         ),
@@ -756,7 +913,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
           child: const Text(
             'บันทึก',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 16,
               color: Colors.white,
             ),
@@ -791,8 +948,15 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
         'check_out_date': _checkOutController.text,
         'rent': _rentController.text,
         'deposit': _depositController.text,
+        'documents': _documentsToString(),
         'updated_at': DateTime.now().toIso8601String(),
       });
+
+      // ลบไฟล์เอกสารที่ถูกกดลบออกจาก Storage
+      for (final url in _removedDocumentUrls) {
+        await _deleteFileFromStorage(url);
+      }
+      _removedDocumentUrls.clear();
     } catch (e) {
       print('❌ _saveRentalInfo error: $e');
     }
@@ -817,7 +981,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                   'คุณต้องการบันทึกข้อมูลใช่ไหม?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF000000),
@@ -839,7 +1003,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                         child: const Text(
                           'ยกเลิก',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                           ),
@@ -872,7 +1036,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Colors.white,
                           ),
@@ -898,7 +1062,7 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -907,8 +1071,9 @@ class _EditeTenantScreenState extends State<EditeTenantScreen> {
               child: Text(
                 'รายละเอียดผู้เช่า',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

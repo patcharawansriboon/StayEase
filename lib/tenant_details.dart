@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'widgets/app_sizes.dart';
 class MasterTenantScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  final VoidCallback? onNavigateToChangeStatus;
   final Map<String, String>? tenantData;
   final String? memberId;
   final String? currentStatus;
@@ -17,7 +17,6 @@ class MasterTenantScreen extends StatefulWidget {
     this.onBack,
     this.onEdit,
     this.onDelete,
-    this.onNavigateToChangeStatus,
     this.tenantData,
     this.memberId,
     this.currentStatus,
@@ -25,10 +24,10 @@ class MasterTenantScreen extends StatefulWidget {
   });
 
   @override
-  State<MasterTenantScreen> createState() => _MasterTenantScreenState();
+  State<MasterTenantScreen> createState() => MasterTenantScreenState();
 }
 
-class _MasterTenantScreenState extends State<MasterTenantScreen> {
+class MasterTenantScreenState extends State<MasterTenantScreen> {
   Map<String, dynamic>? _rentalInfo;
   Map<String, String>? _personalInfo;
   bool _loading = true;
@@ -37,6 +36,24 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
   @override
   void initState() {
     super.initState();
+    _fetchRentalInfo();
+    _fetchPersonalInfo();
+  }
+
+  @override
+  void didUpdateWidget(covariant MasterTenantScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // เปลี่ยนผู้เช่าที่เลือก → ต้องโหลดข้อมูลใหม่ (ไม่ใช้ค่าค้างจากคนก่อน)
+    if (oldWidget.memberId != widget.memberId) {
+      _rentalInfo = null;
+      _personalInfo = null;
+      _fetchRentalInfo();
+      _fetchPersonalInfo();
+    }
+  }
+
+  /// โหลดข้อมูลใหม่ทั้งหมด (เรียกจากภายนอกเมื่อกลับมาหน้านี้)
+  void refresh() {
     _fetchRentalInfo();
     _fetchPersonalInfo();
   }
@@ -114,20 +131,18 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
           .eq('member_id', authUserId)
           .maybeSingle();
 
-      if (personalData != null && mounted) {
+      if (mounted) {
         setState(() {
           _personalInfo = {
-            'idCard': personalData['id_card']?.toString() ?? '',
-            'birthdate': personalData['birthdate']?.toString() ?? '',
-            'gender': personalData['gender']?.toString() ?? '',
-            'address': personalData['address']?.toString() ?? '',
-            'emergencyContact': personalData['emergency_contact']?.toString() ?? '',
-            'emergencyPhone': personalData['emergency_phone']?.toString() ?? '',
+            'idCard': personalData?['id_card']?.toString() ?? '',
+            'birthdate': personalData?['birthdate']?.toString() ?? '',
+            'gender': personalData?['gender']?.toString() ?? '',
+            'address': personalData?['address']?.toString() ?? '',
+            'emergencyContact': personalData?['emergency_contact']?.toString() ?? '',
+            'emergencyPhone': personalData?['emergency_phone']?.toString() ?? '',
           };
           _loadingPersonal = false;
         });
-      } else {
-        if (mounted) setState(() => _loadingPersonal = false);
       }
     } catch (e) {
       if (mounted) setState(() => _loadingPersonal = false);
@@ -137,7 +152,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           _buildHeader(),
@@ -229,7 +244,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
         child: const Text(
           'ยังไม่มีข้อมูลการเช่า',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 13,
             color: Color(0xFF999999),
           ),
@@ -255,7 +270,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
           Text(
             title,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: Color(0xFF4181CB),
@@ -272,11 +287,14 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
     final name = widget.tenantData?['name'] ?? 'พัชราวรรณ  ศรีบุญ';
     final role = widget.tenantData?['role'] ?? 'ผู้เช่าหลัก';
     final phone = widget.tenantData?['phone'] ?? '098-000-0000';
+    final avatarUrl = widget.tenantData?['avatar_url']?.toString() ?? '';
     return Row(
       children: [
         CircleAvatar(
           radius: 28,
-          backgroundImage: const AssetImage('assets/images/user_avatar.png'),
+          backgroundImage: avatarUrl.isNotEmpty
+              ? NetworkImage(avatarUrl)
+              : const AssetImage('assets/images/user_avatar.png') as ImageProvider,
           backgroundColor: Colors.grey.shade200,
         ),
         const SizedBox(width: 12),
@@ -286,7 +304,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
             Text(
               name,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF000000),
@@ -303,7 +321,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
               child: Text(
                 role,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 11,
                   color: Color(0xFF4CAF50),
                 ),
@@ -317,7 +335,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                 Text(
                   phone,
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 13,
                     color: Color(0xFF888888),
                   ),
@@ -348,7 +366,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
           Text(
             title,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: Color(0xFF4181CB),
@@ -365,7 +383,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                       child: Text(
                         r[0],
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           color: Color(0xFF999999),
                         ),
@@ -375,7 +393,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                       child: Text(
                         r[1],
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF000000),
@@ -417,7 +435,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
           const Text(
             'เอกสารแนบ',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: Color(0xFF4181CB),
@@ -428,7 +446,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
             const Text(
               'ยังไม่มีเอกสารแนบ',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 color: Color(0xFF999999),
               ),
@@ -467,7 +485,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 14,
                   color: Color(0xFF000000),
                 ),
@@ -500,7 +518,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                     child: Text(
                       title,
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 14,
                         color: Colors.white,
                       ),
@@ -523,7 +541,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                     child: Text(
                       'ไม่สามารถแสดงไฟล์นี้ได้',
                       style:
-                          TextStyle(fontFamily: 'Prompt', color: Colors.white),
+                          TextStyle(fontFamily: 'Noto Sans Thai', color: Colors.white),
                     ),
                   ),
                 ),
@@ -555,7 +573,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                 child: const Text(
                   'แก้ไขข้อมูล',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 15,
                     color: Color(0xFF4F8FDB),
                   ),
@@ -570,7 +588,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
               child: ElevatedButton(
                 onPressed: widget.onDelete,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF16C6C),
+                  backgroundColor: const Color(0xFFFF0303),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -579,7 +597,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
                 child: const Text(
                   'ลบผู้เช่า',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 15,
                     color: Colors.white,
                   ),
@@ -602,7 +620,7 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -611,8 +629,9 @@ class _MasterTenantScreenState extends State<MasterTenantScreen> {
               child: Text(
                 'รายละเอียดผู้เช่า',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

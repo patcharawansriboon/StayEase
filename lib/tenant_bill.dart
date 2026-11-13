@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'widgets/app_sizes.dart';
 class TenantBillScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onNavigateToDashboard;
@@ -10,6 +12,7 @@ class TenantBillScreen extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final VoidCallback? onCreateBill;
   final void Function(Map<String, dynamic> bill)? onTapBill;
+  final void Function(String billId)? onApproveBill;
   final List<Map<String, String>> tenants;
   final Map<String, dynamic> currentBill;
 
@@ -18,6 +21,7 @@ class TenantBillScreen extends StatefulWidget {
 
   /// สรุปจำนวนบิลตามสถานะ {pending, review, paid}
   final Map<String, int> billStats;
+  final bool showRepairBadge;
 
   const TenantBillScreen({
     super.key,
@@ -29,24 +33,191 @@ class TenantBillScreen extends StatefulWidget {
     this.onNavigateToProfile,
     this.onCreateBill,
     this.onTapBill,
+    this.onApproveBill,
     this.tenants = const [],
     this.currentBill = const {},
     this.bills = const [],
     this.billStats = const {},
+    this.showRepairBadge = false,
   });
 
   @override
-  State<TenantBillScreen> createState() => _TenantBillScreenState();
+  State<TenantBillScreen> createState() => TenantBillScreenState();
 }
 
-class _TenantBillScreenState extends State<TenantBillScreen> {
+// public state class เพื่อให้ main.dart เรียก reload() ผ่าน GlobalKey ได้
+class TenantBillScreenState extends State<TenantBillScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _filter = 'all';
+  final Map<String, String> _avatarCache = {};
+  RealtimeChannel? _tenantChannel;
+
+  // บิลที่โหลดจาก Supabase โดยตรง (กรองแค่หอพักของแอดมินเอง)
+  List<Map<String, dynamic>> _loadedBills = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _loadBills().then((_) => _subscribeTenantChanges()),
+    );
+  }
+
+  /// เรียกจาก main.dart ผ่าน GlobalKey ทุกครั้งที่ navigate มาหน้านี้
+  void reload() {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    _loadBills();
+  }
+
+  /// โหลดบิลจาก Supabase — กรองเฉพาะหอพักที่แอดมินเป็นคนสร้าง
+  Future<void> _loadBills() async {
+    final db = Supabase.instance.client;
+    String? uid = db.auth.currentUser?.id;
+    if (uid == null) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      uid = db.auth.currentUser?.id;
+    }
+    if (uid == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      // หา dormitory_id ของแอดมินคนนี้
+      final dormRows = await db
+          .from('dormitories')
+          .select('id')
+          .eq('created_by', uid);
+      final dormIds =
+          (dormRows as List).map((d) => d['id'].toString()).toList();
+
+      if (dormIds.isEmpty) {
+        if (mounted) setState(() { _loadedBills = []; _isLoading = false; });
+        return;
+      }
+
+      // ดึงบิลทุกตัวในหอพักนี้
+      final rows = await db
+          .from('bills')
+          .select(
+              'id, tenant_id, tenant_name, room, month, rent, electricity, water, penalty, total, due_date, status, qr_image_url, payment_proof_url, created_at, dormitory_id')
+          .inFilter('dormitory_id', dormIds)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _loadedBills = List<Map<String, dynamic>>.from(rows as List);
+        _isLoading = false;
+      });
+
+      // โหลด avatar ของผู้เช่าที่พบในบิล
+      await _loadAvatarsForBills(_loadedBills);
+    } catch (e) {
+      debugPrint('_loadBills error: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tenantChannel?.unsubscribe();
     super.dispose();
+  }
+
+  /// โหลด avatar ของผู้เช่าจากบิลที่โหลดมาแล้ว
+  Future<void> _loadAvatarsForBills(List<Map<String, dynamic>> bills) async {
+    final memberIds = <String>{};
+    for (final bill in bills) {
+      final id = bill['tenant_id']?.toString() ?? '';
+      if (id.isNotEmpty) memberIds.add(id);
+    }
+    for (final memberId in memberIds) {
+      if (_avatarCache.containsKey(memberId)) continue;
+      final avatar = await _fetchAvatarUrl(memberId);
+      if (mounted && avatar != null && avatar.isNotEmpty) {
+        setState(() => _avatarCache[memberId] = avatar);
+      }
+    }
+  }
+
+  /// (legacy) โหลด avatar จาก widget.bills/tenants — ยังคงไว้เผื่อใช้
+  Future<void> _loadAvatars() async {
+    final memberIds = <String>{};
+    for (final bill in widget.bills) {
+      final id = bill['tenant_id']?.toString()
+          ?? bill['member_id']?.toString()
+          ?? bill['user_id']?.toString()
+          ?? '';
+      if (id.isNotEmpty) memberIds.add(id);
+    }
+    for (final t in widget.tenants) {
+      final id = t['member_id']?.toString() ?? t['id']?.toString() ?? '';
+      if (id.isNotEmpty) memberIds.add(id);
+    }
+    for (final memberId in memberIds) {
+      final avatar = await _fetchAvatarUrl(memberId);
+      if (mounted && avatar != null && avatar.isNotEmpty) {
+        _avatarCache[memberId] = avatar;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<String?> _fetchAvatarUrl(String memberId) async {
+    final db = Supabase.instance.client;
+    for (final table in ['tenants', 'roommate_invites', 'profiles']) {
+      final row = await db
+          .from(table)
+          .select('avatar_url')
+          .eq('id', memberId)
+          .maybeSingle();
+      if (row != null && (row['avatar_url'] as String?)?.isNotEmpty == true) {
+        return row['avatar_url'] as String;
+      }
+    }
+    return null;
+  }
+
+  /// ฟังการเปลี่ยนแปลง avatar ของผู้เช่าแบบ real-time
+  void _subscribeTenantChanges() {
+    final client = Supabase.instance.client;
+
+    _tenantChannel = client.channel('realtime:tenant_bill_avatars');
+
+    final channel = _tenantChannel!;
+    channel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'tenants',
+      callback: (payload) async {
+        final changedId = payload.newRecord['id']?.toString() ?? '';
+        final newAvatar = payload.newRecord['avatar_url']?.toString() ?? '';
+        if (changedId.isNotEmpty && newAvatar.isNotEmpty) {
+          if (mounted) {
+            setState(() => _avatarCache[changedId] = newAvatar);
+          }
+        }
+      },
+    )
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'roommate_invites',
+      callback: (payload) async {
+        final changedId = payload.newRecord['id']?.toString() ?? '';
+        final newAvatar = payload.newRecord['avatar_url']?.toString() ?? '';
+        if (changedId.isNotEmpty && newAvatar.isNotEmpty) {
+          if (mounted) {
+            setState(() => _avatarCache[changedId] = newAvatar);
+          }
+        }
+      },
+    )
+        .subscribe();
   }
 
   @override
@@ -56,9 +227,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         .where((bill) {
           final query = _searchController.text.trim().toLowerCase();
           if (query.isEmpty) return true;
-          return '${bill['tenantName']} ${bill['room']}'.toLowerCase().contains(
-            query,
-          );
+          return '${bill['tenantName']} ${bill['room']}'.toLowerCase().contains(query);
         })
         .toList();
 
@@ -68,24 +237,26 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         children: [
           _buildHeader(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSummary(),
-                  const SizedBox(height: 20),
-                  _buildFilters(),
-                  const SizedBox(height: 14),
-                  _buildSearchField(),
-                  const SizedBox(height: 16),
-                  if (bills.isEmpty)
-                    _buildEmptyState()
-                  else
-                    _buildBillList(bills),
-                ],
-              ),
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSummary(),
+                        const SizedBox(height: 20),
+                        _buildFilters(),
+                        const SizedBox(height: 14),
+                        _buildSearchField(),
+                        const SizedBox(height: 16),
+                        if (bills.isEmpty)
+                          _buildEmptyState(hasAnyBills: _loadedBills.isNotEmpty)
+                        else
+                          _buildBillList(bills),
+                      ],
+                    ),
+                  ),
           ),
           _buildBottomNav(),
         ],
@@ -106,9 +277,9 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                 Text(
                   'บิลผู้เช่า',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: kPageTitleFontSize,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF1A1A2E),
                   ),
                 ),
@@ -116,7 +287,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                 Text(
                   'จัดการบิลและสถานะการชำระ',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Color(0xFF8A8A8A),
                   ),
@@ -132,7 +303,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
               label: const Text(
                 'สร้างบิล',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 12,
                   color: Colors.white,
                 ),
@@ -153,17 +324,17 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   Widget _buildSummary() {
-    // ใช้สถิติจริงถ้ามี ไม่งั้นนับจากรายการบิลที่แสดงอยู่
-    final stats = widget.billStats;
-    int pending = stats['pending'] ?? 0;
-    int review = stats['review'] ?? 0;
-    int paid = stats['paid'] ?? 0;
+    // คำนวณจากบิลที่โหลดจาก Supabase โดยตรง
+    final source = _loadedBills.isNotEmpty ? _loadedBills : widget.bills;
+    int pending = source.where((b) => b['status'] == 'pending').length;
+    int review  = source.where((b) => b['status'] == 'review').length;
+    int paid    = source.where((b) => b['status'] == 'paid').length;
 
-    if (stats.isEmpty) {
-      final bills = _buildBills();
-      pending = bills.where((b) => b['status'] == 'pending').length;
-      review = bills.where((b) => b['status'] == 'review').length;
-      paid = bills.where((b) => b['status'] == 'paid').length;
+    // fallback ไปที่ widget.billStats ถ้า source ว่าง
+    if (source.isEmpty && widget.billStats.isNotEmpty) {
+      pending = widget.billStats['pending'] ?? 0;
+      review  = widget.billStats['review']  ?? 0;
+      paid    = widget.billStats['paid']    ?? 0;
     }
 
     return Row(
@@ -215,13 +386,13 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
         children: [
           Text(
             title,
-            style: TextStyle(fontFamily: 'Prompt', fontSize: 11, color: color),
+            style: TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 11, color: color),
           ),
           const SizedBox(height: 5),
           Text(
             value,
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: color,
@@ -268,7 +439,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     color: selected ? Colors.white : const Color(0xFF667085),
@@ -309,7 +480,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                 isCollapsed: true,
                 hintText: 'ค้นหาผู้เช่าหรือห้อง',
                 hintStyle: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 13,
                   color: Color(0xFF9AA4B2),
                 ),
@@ -350,6 +521,9 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
     final status = bill['status'] as String;
     final statusColor = _statusColor(status);
     final statusBackground = _statusBackground(status);
+    final proofUrl = bill['paymentProofUrl']?.toString() ??
+        bill['payment_proof_url']?.toString() ??
+        '';
 
     return GestureDetector(
       onTap: () {
@@ -376,9 +550,9 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
               CircleAvatar(
                 radius: 21,
                 backgroundColor: const Color(0xFFEAF2FB),
-                backgroundImage: const AssetImage(
-                  'assets/images/user_avatar.png',
-                ),
+                backgroundImage: (bill['avatar_url']?.toString().isNotEmpty == true)
+                    ? NetworkImage(bill['avatar_url'].toString())
+                    : const AssetImage('assets/images/user_avatar.png') as ImageProvider,
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -390,7 +564,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF1A1A2E),
@@ -400,7 +574,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                     Text(
                       'ห้อง ${bill['room']}  •  ${bill['month']}',
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 11,
                         color: Color(0xFF8A8A8A),
                       ),
@@ -417,7 +591,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                 child: Text(
                   bill['statusLabel'] as String,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: statusColor,
@@ -438,7 +612,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                     const Text(
                       'ยอดเงิน',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 11,
                         color: Color(0xFF8A8A8A),
                       ),
@@ -447,7 +621,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                     Text(
                       _formatAmount(bill['total'] as num),
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF1A1A2E),
@@ -462,7 +636,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                   const Text(
                     'ครบกำหนด',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 11,
                       color: Color(0xFF8A8A8A),
                     ),
@@ -471,7 +645,7 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                   Text(
                     bill['dueDate'] as String,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 11,
                       color: Color(0xFF667085),
                     ),
@@ -480,13 +654,88 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
               ),
             ],
           ),
+          if (proofUrl.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => Dialog(
+                    child: InteractiveViewer(
+                      child: Image.network(proofUrl),
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F8FD),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.receipt_long, size: 18, color: Color(0xFF4F8FDB)),
+                    SizedBox(width: 8),
+                    Text(
+                      'ดูหลักฐานการโอน',
+                      style: TextStyle(
+                        fontFamily: 'Noto Sans Thai',
+                        fontSize: 12,
+                        color: Color(0xFF4F8FDB),
+                      ),
+                    ),
+                    Spacer(),
+                    Icon(Icons.chevron_right, size: 18, color: Color(0xFF4F8FDB)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (status == 'review')
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: ElevatedButton(
+                  onPressed: bill['id'] != null
+                      ? () => widget.onApproveBill?.call(bill['id'].toString())
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    disabledBackgroundColor: const Color(0xFFBDBDBD),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'อนุมัติการชำระ',
+                    style: TextStyle(
+                      fontFamily: 'Noto Sans Thai',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({bool hasAnyBills = false}) {
+    // hasAnyBills = true  → มีบิลในระบบแต่ filter/search ไม่ตรง
+    // hasAnyBills = false → ยังไม่มีบิลเลยในหอพักนี้
+    final title = hasAnyBills ? 'ไม่พบรายการบิล' : 'ยังไม่มีบิล';
+    final subtitle = hasAnyBills
+        ? 'ลองเปลี่ยนตัวกรองหรือค้นหาใหม่'
+        : 'กด "สร้างบิล" เพื่อออกบิลให้ผู้เช่าในหอพัก';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 44),
@@ -503,20 +752,21 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
             color: Color(0xFFB7C1CE),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'ไม่พบรายการบิล',
-            style: TextStyle(
-              fontFamily: 'Prompt',
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: Color(0xFF667085),
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'ลองเปลี่ยนตัวกรองหรือค้นหาใหม่',
-            style: TextStyle(
-              fontFamily: 'Prompt',
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Noto Sans Thai',
               fontSize: 12,
               color: Color(0xFF9AA4B2),
             ),
@@ -577,7 +827,30 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
                   height: 52,
                   child: Center(
                     child: index == 3
-                        ? Icon(Icons.build_outlined, size: 22, color: color)
+                        ? (widget.showRepairBadge
+                            ? Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Icon(Icons.build_outlined,
+                                      size: 22, color: color),
+                                  Positioned(
+                                    right: -3,
+                                    top: -3,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE53935),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: const Color(0xFF4F8FDB),
+                                            width: 1.5),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Icon(Icons.build_outlined, size: 22, color: color))
                         : SvgPicture.asset(
                             _iconPath(index),
                             width: 24,
@@ -641,35 +914,36 @@ class _TenantBillScreenState extends State<TenantBillScreen> {
   }
 
   List<Map<String, dynamic>> _buildBills() {
-    // ใช้บิลจริงจาก Supabase ถ้ามี
-    if (widget.bills.isNotEmpty) {
-      return widget.bills;
-    }
+    // ใช้บิลที่โหลดจาก Supabase ก่อน ถ้ายังไม่มีค่อยใช้ widget.bills (legacy)
+    final source = _loadedBills.isNotEmpty ? _loadedBills : widget.bills;
+    if (source.isEmpty) return [];
 
-    // ไม่มีบิลจริง → ข้อมูลจำลอง (fallback)
-    final bill = widget.currentBill;
-    final tenantList = widget.tenants.isNotEmpty
-        ? widget.tenants
-        : [
-            {'name': 'พัชราวรรณ ศรีบุญ', 'room': 'A101', 'role': 'ผู้เช่าหลัก', 'phone': '0999999999', 'status': 'กำลังเช่า'},
-            {'name': 'สมชาย ใจดี',        'room': 'A101', 'role': 'Roommate',    'phone': '0888888888', 'status': 'กำลังเช่า'},
-            {'name': 'วิภา รักเรียน',     'room': 'A102', 'role': 'ผู้เช่าหลัก', 'phone': '0777777777', 'status': 'กำลังเช่า'},
-          ];
-    return tenantList.asMap().entries.map((entry) {
-      final index = entry.key;
-      final tenant = entry.value;
-      final pending = index == 0;
-      final review = index == 1;
-      return {
-        'tenantName': tenant['name'],
-        'room': tenant['room'],
-        'month': index == 0 ? (bill['month'] ?? 'กรกฎาคม 2569') : 'สิงหาคม 2569',
-        'total': index == 0 ? (bill['total'] ?? 5090) : 5090 - index * 110,
-        'dueDate': index == 0 ? (bill['due_date'] ?? '5 สิงหาคม 2569') : '5 สิงหาคม 2569',
-        'status': pending ? 'pending' : review ? 'review' : 'paid',
-        'statusLabel': pending ? 'รอชำระ' : review ? 'รอตรวจสอบ' : 'ชำระแล้ว',
-      };
-    }).toList();
+    return source.map((bill) {
+        // normalize keys ให้เข้ากัน
+        final status = bill['status']?.toString() ?? 'pending';
+        final statusLabel = bill['statusLabel']?.toString() ??
+            bill['status_label']?.toString() ??
+            (status == 'review'
+                ? 'รอตรวจสอบ'
+                : status == 'paid'
+                    ? 'ชำระแล้ว'
+                    : 'รอชำระ');
+        return {
+          'id': bill['id'],
+          'tenantName': bill['tenantName'] ?? bill['tenant_name'] ?? '',
+          'room': bill['room'] ?? bill['room_number'] ?? '',
+          'month': bill['month'] ?? '',
+          'total': bill['total'] ?? bill['amount'] ?? 0,
+          'dueDate': bill['dueDate'] ?? bill['due_date'] ?? '',
+          'status': status,
+          'statusLabel': statusLabel,
+          'avatar_url': _avatarCache[bill['tenant_id']?.toString() ?? ''] ??
+              bill['avatar_url'] ??
+              bill['tenant_avatar_url'] ??
+              '',
+          ...bill,
+        };
+      }).toList();
   }
 
   Color _statusColor(String status) {

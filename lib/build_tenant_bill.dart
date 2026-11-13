@@ -6,12 +6,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'scan.dart';
 import 'sample_bill.dart';
 
+import 'widgets/app_sizes.dart';
 class BuildTenantBillScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onSave;
   final void Function(Map<String, dynamic> billData)? onNext;
   final String? billId;
   final Map<String, dynamic>? initialData;
+  final List<Map<String, dynamic>> bills;
+  final void Function(String billId)? onApproveBill;
 
   const BuildTenantBillScreen({
     super.key,
@@ -20,6 +23,8 @@ class BuildTenantBillScreen extends StatefulWidget {
     this.onNext,
     this.billId,
     this.initialData,
+    this.bills = const [],
+    this.onApproveBill,
   });
 
   @override
@@ -36,9 +41,12 @@ class _BuildTenantBillScreenState
   String? _selectedRoom;
   String? _selectedRole;
   String? _selectedUserId;
+  String? _selectedAvatarUrl;
 
   List<Map<String, String>> _tenantList = [];
   bool _loadingTenants = false;
+  RealtimeChannel? _tenantChannel;
+  RealtimeChannel? _rateChannel;
 
   // tenant_id ที่สร้างบิลรอบเดือนปัจจุบันไปแล้ว
   Set<String> _billedTenantIds = {};
@@ -51,9 +59,14 @@ class _BuildTenantBillScreenState
   String _electricPrev = '00000';
   String _waterPrev = '00000';
 
+  // รอบบิลและวันครบกำหนด
+  String _billMonth = '';
+  DateTime? _dueDate;
+
   // อัตราค่าบริการ (บาท/หน่วย)
-  double _electricRate = 12;
-  double _waterRate = 12;
+  // ค่าเริ่มต้น 0 จนกว่าจะโหลดจาก Supabase (dormitories) เสร็จ
+  double _electricRate = 0;
+  double _waterRate = 0;
 
   // รูป QR code โอนเงิน
   Uint8List? _qrBytes;
@@ -80,26 +93,195 @@ class _BuildTenantBillScreenState
       (_waterMeter != null && _waterMeter!.isNotEmpty) &&
       _roomFeeController.text.isNotEmpty;
 
+  // โหลดเลขมิเตอร์รอบก่อนของผู้เช่าที่เลือก
+  Future<void> _loadPreviousMeters(String tenantId) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('bills')
+          .select(
+              'electric_meter_prev, electric_meter_curr, water_meter_prev, water_meter_curr, created_at')
+          .eq('tenant_id', tenantId)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (rows.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _electricPrev = '00000';
+            _waterPrev = '00000';
+          });
+        }
+        return;
+      }
+      final r = (rows as List).first as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _electricPrev = (r['electric_meter_curr'] ?? r['electric_meter_prev'] ?? '00000')
+            .toString();
+        _waterPrev =
+            (r['water_meter_curr'] ?? r['water_meter_prev'] ?? '00000').toString();
+      });
+    } catch (e) {
+      print('❌ _loadPreviousMeters error: $e');
+      if (mounted) {
+        setState(() {
+          _electricPrev = '00000';
+          _waterPrev = '00000';
+        });
+      }
+    }
+  }
+
+  // โหลดอัตราค่าไฟ/น้ำของหอพัก (ตรงกับที่ตั้งไว้ในหน้าตั้งค่าหอพัก)
+  Future<void> _loadRates() async {
+    try {
+      final db = Supabase.instance.client;
+      final uid = db.auth.currentUser?.id;
+      if (uid == null) return;
+      final rows = await db
+          .from('dormitories')
+          .select('electricity_rate, water_rate')
+          .eq('created_by', uid)
+          .limit(1);
+      if ((rows as List).isEmpty || !mounted) return;
+      final r = rows.first as Map<String, dynamic>;
+      final e = (r['electricity_rate'] as num?)?.toDouble();
+      final w = (r['water_rate'] as num?)?.toDouble();
+      setState(() {
+        if (e != null) _electricRate = e;
+        if (w != null) _waterRate = w;
+      });
+    } catch (err) {
+      print('❌ _loadRates error: $err');
+    }
+  }
+
+  // ฟังการแก้อัตราของหอพักแบบ real-time (แอดมินแก้ในหน้าตั้งค่าแล้วอัปเดตทันที)
+  void _subscribeRateChanges() {
+    _rateChannel = Supabase.instance.client
+        .channel('realtime:build_bill_rates')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'dormitories',
+          callback: (_) => _loadRates(),
+        )
+        .subscribe();
+  }
+
   @override
   void initState() {
     super.initState();
-    // อัปเดตยอดรวมเมื่อแก้ค่าห้อง
-    _roomFeeController.addListener(() => setState(() {}));
-    if (widget.initialData != null) {
-      _selectedName = widget.initialData!['tenantName']?.toString() ??
-          widget.initialData!['name']?.toString();
-      _selectedRoom = widget.initialData!['room']?.toString();
-      _selectedRole = widget.initialData!['role']?.toString();
-      _selectedUserId = widget.initialData!['userId']?.toString() ??
-          widget.initialData!['user_id']?.toString();
-    }
-    _loadTenants();
+    _loadRates();
+    _subscribeRateChanges();
   }
 
   @override
   void dispose() {
     _roomFeeController.dispose();
+    _tenantChannel?.unsubscribe();
+    _rateChannel?.unsubscribe();
     super.dispose();
+  }
+
+  /// กดย้อนกลับ — ถ้ากรอกข้อมูลบางส่วนแล้วให้ยืนยันก่อน
+  Future<void> _confirmBack() async {
+    final hasData = _selectedName != null ||
+        _roomFeeController.text.isNotEmpty ||
+        (_electricMeter != null && _electricMeter!.isNotEmpty) ||
+        (_waterMeter != null && _waterMeter!.isNotEmpty) ||
+        _qrBytes != null;
+
+    if (!hasData) {
+      widget.onBack?.call();
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+                const Text(
+                  'ยืนยันการย้อนกลับ',
+                  style: TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              const Text(
+                'ข้อมูลที่กรอกไว้จะหายทั้งหมด\nต้องการย้อนกลับหรือไม่?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: 13,
+                  color: Color(0xFF667085),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF4F8FDB)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      child: const Text(
+                        'ยกเลิก',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 14,
+                          color: Color(0xFF4F8FDB),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF0303),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      child: const Text(
+                        'ย้อนกลับ',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      widget.onBack?.call();
+    }
   }
 
   Future<void> _loadTenants() async {
@@ -147,7 +329,7 @@ class _BuildTenantBillScreenState
           ? []
           : await db
               .from('tenants')
-              .select('id, full_name, phone')
+              .select('id, full_name, phone, avatar_url')
               .inFilter('id', userIds);
       final roomRows = roomIds.isEmpty
           ? []
@@ -181,6 +363,7 @@ class _BuildTenantBillScreenState
           'name': name,
           'room': roomNum,
           'role': 'ผู้เช่าหลัก',
+          'avatar_url': tenant?['avatar_url']?.toString() ?? '',
         });
       }
 
@@ -196,6 +379,34 @@ class _BuildTenantBillScreenState
     } finally {
       if (mounted) setState(() => _loadingTenants = false);
     }
+  }
+
+  /// ฟังการเปลี่ยนแปลง avatar ของผู้เช่าแบบ real-time
+  void _subscribeTenantChanges() {
+    final client = Supabase.instance.client;
+    _tenantChannel = client.channel('realtime:build_tenant_bill_avatars');
+
+    final channel = _tenantChannel!;
+    channel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'tenants',
+      callback: (payload) async {
+        final changedId = payload.newRecord['id']?.toString() ?? '';
+        final newAvatar = payload.newRecord['avatar_url']?.toString() ?? '';
+        if (changedId.isNotEmpty && newAvatar.isNotEmpty && mounted) {
+          setState(() {
+            for (final t in _tenantList) {
+              if (t['userId'] == changedId) {
+                t['avatar_url'] = newAvatar;
+              }
+            }
+          });
+        }
+      },
+    )
+        .subscribe();
   }
 
   // รอบบิลเดือนปัจจุบัน เช่น "สิงหาคม 2569" (ให้ตรงกับที่ sample_bill บันทึก)
@@ -253,7 +464,7 @@ class _BuildTenantBillScreenState
       child: Text(
         label,
         style: TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: fg,
@@ -263,7 +474,15 @@ class _BuildTenantBillScreenState
   }
 
   // ---- Bottom Sheet เลือกห้อง/ผู้เช่า ----
-  void _showSelectTenantSheet() {
+  void _showSelectTenantSheet() async {
+    // โหลดรายชื่อใหม่ก่อนเปิด popup
+    await _loadTenants();
+    _subscribeTenantChanges();
+    if (!mounted) return;
+
+    final searchController = TextEditingController();
+    List<Map<String, String>> filteredList = List.from(_tenantList);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -271,123 +490,197 @@ class _BuildTenantBillScreenState
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.55,
-        maxChildSize: 0.85,
-        minChildSize: 0.3,
-        builder: (_, controller) => Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDDDDDD),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: Text(
-                'เลือกห้อง / ผู้เช่า',
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A2E),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setModalState) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.65,
+          maxChildSize: 0.9,
+          minChildSize: 0.3,
+          builder: (_, controller) => Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDDDDD),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            const Divider(height: 1, color: Color(0xFFEEEEEE)),
-            if (_loadingTenants)
-              const Expanded(
-                  child: Center(child: CircularProgressIndicator()))
-            else if (_tenantList.isEmpty)
-              const Expanded(
-                child: Center(
-                  child: Text(
-                    'ไม่พบผู้เช่าที่อนุมัติแล้ว',
-                    style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 14,
-                        color: Color(0xFF888888)),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Text(
+                  'เลือกห้อง / ผู้เช่า',
+                  style: TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A2E),
                   ),
                 ),
-              )
-            else
-              Expanded(
-                child: ListView.separated(
-                  controller: controller,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  itemCount: _tenantList.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
-                  itemBuilder: (_, i) {
-                    final t = _tenantList[i];
-                    final isChosen = t['userId'] == _selectedUserId;
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 4),
-                      leading: CircleAvatar(
-                        radius: 20,
-                        backgroundColor: const Color(0xFFEAF2FB),
-                        child: Text(
-                          t['name']!.isNotEmpty ? t['name']![0] : '?',
-                          style: const TextStyle(
-                            fontFamily: 'Prompt',
-                            fontSize: 15,
-                            color: Color(0xFF4F8FDB),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: TextField(
+                  controller: searchController,
+                  style: const TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 14,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'ค้นหาชื่อหรือเลขห้อง...',
+                    hintStyle: const TextStyle(
+                      fontFamily: 'Noto Sans Thai',
+                      fontSize: 14,
+                      color: Color(0xFFAAAAAA),
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: Color(0xFF888888),
+                      size: 22,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F8FC),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDCE6F2)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFDCE6F2)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF4F8FDB)),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setModalState(() {
+                      final query = value.toLowerCase().trim();
+                      if (query.isEmpty) {
+                        filteredList = List.from(_tenantList);
+                      } else {
+                        filteredList = _tenantList.where((t) {
+                          final name = (t['name'] ?? '').toLowerCase();
+                          final room = (t['room'] ?? '').toLowerCase();
+                          return name.contains(query) || room.contains(query);
+                        }).toList();
+                      }
+                    });
+                  },
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFEEEEEE)),
+              if (_loadingTenants)
+                const Expanded(
+                    child: Center(child: CircularProgressIndicator()))
+              else if (filteredList.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      searchController.text.isEmpty
+                          ? 'ไม่พบผู้เช่าที่อนุมัติแล้ว'
+                          : 'ไม่พบผลการค้นหา',
+                      style: const TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 14,
+                          color: Color(0xFF888888)),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    controller: controller,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: filteredList.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                    itemBuilder: (_, i) {
+                      final t = filteredList[i];
+                      final isChosen = t['userId'] == _selectedUserId;
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 4),
+                        leading: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: const Color(0xFFEAF2FB),
+                          backgroundImage:
+                              (t['avatar_url']?.isNotEmpty == true)
+                                  ? NetworkImage(t['avatar_url']!)
+                                  : null,
+                          child: (t['avatar_url']?.isNotEmpty != true)
+                              ? Text(
+                                  t['name']!.isNotEmpty ? t['name']![0] : '?',
+                                  style: const TextStyle(
+                                    fontFamily: 'Noto Sans Thai',
+                                    fontSize: 15,
+                                    color: Color(0xFF4F8FDB),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        title: Text(
+                          t['name']!,
+                          style: TextStyle(
+                            fontFamily: 'Noto Sans Thai',
+                            fontSize: 14,
+                            fontWeight: isChosen
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: const Color(0xFF1A1A2E),
                           ),
                         ),
-                      ),
-                      title: Text(
-                        t['name']!,
-                        style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 14,
-                          fontWeight: isChosen
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: const Color(0xFF1A1A2E),
+                        subtitle: Text(
+                          'ห้อง ${t['room']}  •  ${t['role']}',
+                          style: const TextStyle(
+                            fontFamily: 'Noto Sans Thai',
+                            fontSize: 12,
+                            color: Color(0xFF888888),
+                          ),
                         ),
-                      ),
-                      subtitle: Text(
-                        'ห้อง ${t['room']}  •  ${t['role']}',
-                        style: const TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 12,
-                          color: Color(0xFF888888),
-                        ),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildBillStatusBadge(t['userId'] ?? ''),
-                          if (isChosen) ...[
-                            const SizedBox(width: 8),
-                            const Icon(Icons.check_circle,
-                                color: Color(0xFF4F8FDB), size: 20),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildBillStatusBadge(t['userId'] ?? ''),
+                            if (isChosen) ...[
+                              const SizedBox(width: 8),
+                              const Icon(Icons.check_circle,
+                                  color: Color(0xFF4F8FDB), size: 20),
+                            ],
                           ],
-                        ],
-                      ),
-                      onTap: () {
-                        setState(() {
+                        ),
+                        onTap: () {
+                          setState(() {
                           _selectedName = t['name'];
                           _selectedRoom = t['room'];
                           _selectedRole = t['role'];
                           _selectedUserId = t['userId'];
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
+                          _selectedAvatarUrl = t['avatar_url'];
+                          _electricMeter = null;
+                          _waterMeter = null;
+                          });
+                          if (t['userId'] != null && t['userId']!.isNotEmpty) {
+                            _loadPreviousMeters(t['userId']!);
+                          }
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      searchController.dispose();
+    });
   }
 
   @override
@@ -405,6 +698,13 @@ class _BuildTenantBillScreenState
                 children: [
                   // ---- การ์ดเลือกผู้เช่า ----
                   _buildTenantCard(),
+                  const SizedBox(height: 16),
+
+                  // ---- การ์ดรอบบิล ----
+                  _buildBillMonthCard(),
+                  const SizedBox(height: 12),
+                  // ---- การ์ดครบกำหนดชำระ ----
+                  _buildDueDateCard(),
                   const SizedBox(height: 20),
 
                   // ---- หัวข้อ บันทึกเลขมิเตอร์ ----
@@ -543,7 +843,7 @@ class _BuildTenantBillScreenState
           const Text(
             'ยอดรวมสุทธิ',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1A1A2E),
@@ -552,7 +852,7 @@ class _BuildTenantBillScreenState
           Text(
             '${_fmtMoney(_grandTotal)} บาท',
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 18,
               fontWeight: FontWeight.w700,
               color: Color(0xFF1A1A2E),
@@ -585,7 +885,7 @@ class _BuildTenantBillScreenState
               const Text(
                 'QR code โอนเงิน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1A1A2E),
@@ -618,7 +918,7 @@ class _BuildTenantBillScreenState
                     Text(
                       'อัปโหลดรูป QR code',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF4F8FDB),
@@ -628,7 +928,7 @@ class _BuildTenantBillScreenState
                     Text(
                       'รองรับไฟล์รูปภาพ',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 11,
                         color: Color(0xFFAAAAAA),
                       ),
@@ -655,7 +955,7 @@ class _BuildTenantBillScreenState
                   Text(
                     _qrFileName!,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 11,
                       color: Color(0xFF888888),
                     ),
@@ -674,7 +974,7 @@ class _BuildTenantBillScreenState
                         label: const Text(
                           'เปลี่ยนรูป',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 13,
                             color: Color(0xFF4F8FDB),
                           ),
@@ -695,17 +995,17 @@ class _BuildTenantBillScreenState
                           _qrFileName = null;
                         }),
                         icon: const Icon(Icons.delete_outline,
-                            size: 18, color: Color(0xFFD32F2F)),
+                            size: 18, color: Color(0xFFFF0303)),
                         label: const Text(
                           'ลบรูป',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 13,
-                            color: Color(0xFFD32F2F),
+                            color: Color(0xFFFF0303),
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFD32F2F)),
+                          side: const BorderSide(color: Color(0xFFFF0303)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -751,7 +1051,7 @@ class _BuildTenantBillScreenState
         child: const Text(
           'ถัดไป',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -779,6 +1079,9 @@ class _BuildTenantBillScreenState
       'grandTotal': _grandTotal,
       'qrBytes': _qrBytes,
       'qrFileName': _qrFileName,
+      'billMonth': _billMonth,
+      'dueDate': _dueDate?.toIso8601String(),
+      'dueDateText': _dueDate == null ? '' : _formatThaiDate(_dueDate!),
     };
     if (widget.onNext != null) {
       widget.onNext!(data);
@@ -802,24 +1105,372 @@ class _BuildTenantBillScreenState
     );
   }
 
-  // ---- Header ----
+  // ---- การ์ดรอบบิล ----
+  Widget _buildBillMonthCard() {
+    return GestureDetector(
+      onTap: _pickBillMonth,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F8FC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFDCE6F2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFDCE6F2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.receipt_long_outlined,
+                size: 22,
+                color: Color(0xFF4F8FDB),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'รอบบิล',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                fontSize: 14,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              _billMonth,
+              style: const TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.calendar_month_outlined,
+              size: 18,
+              color: Color(0xFF4F8FDB),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- การ์ดครบกำหนดชำระ ----
+  Widget _buildDueDateCard() {
+    final dueText = _dueDate == null ? '-' : _formatThaiDate(_dueDate!);
+    return GestureDetector(
+      onTap: _pickDueDate,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F8FC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFDCE6F2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFF3E0),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.event_outlined,
+                size: 22,
+                color: Color(0xFFE6900B),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'ครบกำหนดชำระ',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                fontSize: 14,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              dueText,
+              style: const TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.calendar_month_outlined,
+              size: 18,
+              color: Color(0xFFE6900B),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- การ์ด รอบบิล และ ครบกำหนดชำระ ----
+  Widget _buildBillPeriodCard() {
+    final dueText = _dueDate == null ? '-' : _formatThaiDate(_dueDate!);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F8FC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDCE6F2)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDCE6F2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.receipt_long_outlined,
+                  size: 22,
+                  color: Color(0xFF4F8FDB),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'รอบบิล',
+                style: TextStyle(
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: 14,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _billMonth,
+                style: const TextStyle(
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, color: Color(0xFFE6EDF7)),
+          ),
+          GestureDetector(
+            onTap: _pickDueDate,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFF3E0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.event_outlined,
+                    size: 22,
+                    color: Color(0xFFE6900B),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'ครบกำหนดชำระ',
+                  style: TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 14,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  dueText,
+                  style: const TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.calendar_month_outlined,
+                  size: 18,
+                  color: Color(0xFFE6900B),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? now,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF4F8FDB),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1A1A2E),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4F8FDB),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() => _dueDate = picked);
+    }
+  }
+
+  Future<void> _pickBillMonth() async {
+    final now = DateTime.now();
+    DateTime initialDate;
+    if (_billMonth.isNotEmpty) {
+      try {
+        const months = [
+          'มกราคม',
+          'กุมภาพันธ์',
+          'มีนาคม',
+          'เมษายน',
+          'พฤษภาคม',
+          'มิถุนายน',
+          'กรกฎาคม',
+          'สิงหาคม',
+          'กันยายน',
+          'ตุลาคม',
+          'พฤศจิกายน',
+          'ธันวาคม',
+        ];
+        final parts = _billMonth.split(' ');
+        final monthName = parts[0];
+        final buddhistYear = int.tryParse(parts[1]) ?? (now.year + 543);
+        final monthIndex = months.indexOf(monthName);
+        if (monthIndex >= 0) {
+          initialDate = DateTime(buddhistYear - 543, monthIndex + 1, 1);
+        } else {
+          initialDate = DateTime(now.year, now.month, 1);
+        }
+      } catch (_) {
+        initialDate = DateTime(now.year, now.month, 1);
+      }
+    } else {
+      initialDate = DateTime(now.year, now.month, 1);
+    }
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime(now.year + 5, 12, 31),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF4F8FDB),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1A1A2E),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4F8FDB),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && mounted) {
+      const months = [
+        'มกราคม',
+        'กุมภาพันธ์',
+        'มีนาคม',
+        'เมษายน',
+        'พฤษภาคม',
+        'มิถุนายน',
+        'กรกฎาคม',
+        'สิงหาคม',
+        'กันยายน',
+        'ตุลาคม',
+        'พฤศจิกายน',
+        'ธันวาคม',
+      ];
+      setState(() {
+        _billMonth = '${months[picked.month - 1]} ${picked.year + 543}';
+      });
+    }
+  }
+
+  String _formatThaiDate(DateTime date) {
+    const months = [
+      'มกราคม',
+      'กุมภาพันธ์',
+      'มีนาคม',
+      'เมษายน',
+      'พฤษภาคม',
+      'มิถุนายน',
+      'กรกฎาคม',
+      'สิงหาคม',
+      'กันยายน',
+      'ตุลาคม',
+      'พฤศจิกายน',
+      'ธันวาคม',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year + 543}';
+  }
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
       child: Row(
         children: [
           GestureDetector(
-            onTap: widget.onBack,
+            onTap: _confirmBack,
             child: const Icon(Icons.chevron_left,
-                size: 28, color: Color(0xFF1A1A2E)),
+                size: kBackIconSize, color: Color(0xFF1A1A2E)),
           ),
           const Expanded(
             child: Center(
               child: Text(
                 'สร้างบิลผู้เช่า',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),
@@ -847,19 +1498,22 @@ class _BuildTenantBillScreenState
       ),
       child: Row(
         children: [
-          // ไอคอนคน
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: Color(0xFFDCE6F2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              hasSelected ? Icons.person : Icons.person_outline,
-              size: 24,
-              color: const Color(0xFF4F8FDB),
-            ),
+          // โปรไฟล์รูปผู้เช่า
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: const Color(0xFFEAF2FB),
+            backgroundImage:
+                (_selectedAvatarUrl != null && _selectedAvatarUrl!.isNotEmpty)
+                    ? NetworkImage(_selectedAvatarUrl!)
+                    : null,
+            child: (_selectedAvatarUrl == null ||
+                    _selectedAvatarUrl!.isEmpty)
+                ? Icon(
+                    hasSelected ? Icons.person : Icons.person_outline,
+                    size: 24,
+                    color: const Color(0xFF4F8FDB),
+                  )
+                : null,
           ),
           const SizedBox(width: 12),
           // ชื่อ + subtitle
@@ -870,7 +1524,7 @@ class _BuildTenantBillScreenState
                 Text(
                   name,
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1A1A2E),
@@ -882,7 +1536,7 @@ class _BuildTenantBillScreenState
                       ? 'ห้อง $room  •  $role'
                       : 'กรุณาเลือกผู้เช่าที่ต้องการสร้างบิล',
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Color(0xFF888888),
                   ),
@@ -907,7 +1561,7 @@ class _BuildTenantBillScreenState
                   Text(
                     hasSelected ? 'เปลี่ยน' : 'เลือกผู้เช่า',
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: Colors.white,
@@ -938,7 +1592,7 @@ class _BuildTenantBillScreenState
             Text(
               'บันทึกเลขมิเตอร์',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF1A1A2E),
@@ -948,7 +1602,7 @@ class _BuildTenantBillScreenState
             Text(
               'เลือกวิธีบันทึกแยกตามประเภทมิเตอร์ได้',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 12,
                 color: Color(0xFF888888),
               ),
@@ -1007,7 +1661,7 @@ class _BuildTenantBillScreenState
                 child: Text(
                   title,
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1A1A2E),
@@ -1127,7 +1781,7 @@ class _BuildTenantBillScreenState
           title: Text(
             title,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1A1A2E),
@@ -1156,7 +1810,7 @@ class _BuildTenantBillScreenState
               child: const Text(
                 'ยกเลิก',
                 style:
-                    TextStyle(fontFamily: 'Prompt', color: Color(0xFF888888)),
+                    TextStyle(fontFamily: 'Noto Sans Thai', color: Color(0xFF888888)),
               ),
             ),
             ElevatedButton(
@@ -1169,7 +1823,7 @@ class _BuildTenantBillScreenState
               ),
               child: const Text(
                 'บันทึก',
-                style: TextStyle(fontFamily: 'Prompt', color: Colors.white),
+                style: TextStyle(fontFamily: 'Noto Sans Thai', color: Colors.white),
               ),
             ),
           ],
@@ -1195,7 +1849,7 @@ class _BuildTenantBillScreenState
         Text(
           label,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 13,
             color: Color(0xFF555555),
           ),
@@ -1210,7 +1864,7 @@ class _BuildTenantBillScreenState
             LengthLimitingTextInputFormatter(8),
           ],
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 18,
             letterSpacing: 4,
             color: Color(0xFF1A1A2E),
@@ -1218,7 +1872,7 @@ class _BuildTenantBillScreenState
           decoration: InputDecoration(
             hintText: 'กรอกเลขมิเตอร์',
             hintStyle: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               letterSpacing: 0,
               color: Color(0xFFAAAAAA),
@@ -1292,7 +1946,7 @@ class _BuildTenantBillScreenState
               const Text(
                 'รวม',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1A1A2E),
@@ -1301,7 +1955,7 @@ class _BuildTenantBillScreenState
               Text(
                 '${_fmtMoney(total)} บาท',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: totalColor,
@@ -1344,7 +1998,7 @@ class _BuildTenantBillScreenState
         Text(
           label,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             color: Color(0xFF555555),
           ),
@@ -1352,7 +2006,7 @@ class _BuildTenantBillScreenState
         Text(
           value,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
@@ -1409,7 +2063,7 @@ class _BuildTenantBillScreenState
             Text(
               label,
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: color,
@@ -1434,7 +2088,7 @@ class _BuildTenantBillScreenState
           const Text(
             'ค่าห้อง',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               color: Color(0xFF000000),
             ),
@@ -1446,20 +2100,21 @@ class _BuildTenantBillScreenState
             height: 40,
             child: TextField(
               controller: _roomFeeController,
+              onChanged: (_) => setState(() {}),
               keyboardType: TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
               textAlign: TextAlign.right,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 15,
                 color: Color(0xFF000000),
               ),
               decoration: InputDecoration(
                 hintText: '0000.00',
                 hintStyle: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   color: Color(0xFFCCCCCC),
                 ),
@@ -1489,7 +2144,7 @@ class _BuildTenantBillScreenState
           const Text(
             'บาท',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               color: Color(0xFF000000),
             ),

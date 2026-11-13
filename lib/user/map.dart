@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
+import '../widgets/app_sizes.dart';
 class MapScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final ValueChanged<String>? onSelectAddress;
@@ -244,15 +245,16 @@ class _MapScreenState extends State<MapScreen> {
                   GestureDetector(
                     onTap: widget.onBack,
                     child: const Icon(Icons.chevron_left,
-                        size: 24, color: Color(0xFF000000)),
+                        size: kBackIconSize, color: Color(0xFF000000)),
                   ),
                   const Expanded(
                     child: Center(
                       child: Text(
                         'ที่อยู่',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 16,
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                           color: Color(0xFF000000),
                         ),
                       ),
@@ -324,11 +326,11 @@ class _MapScreenState extends State<MapScreen> {
                                     onSubmitted: _searchAddress,
                                     textInputAction: TextInputAction.search,
                                     style: const TextStyle(
-                                        fontFamily: 'Prompt', fontSize: 13),
+                                        fontFamily: 'Noto Sans Thai', fontSize: 13),
                                     decoration: const InputDecoration(
                                       hintText: 'ค้นหาที่อยู่',
                                       hintStyle: TextStyle(
-                                        fontFamily: 'Prompt',
+                                        fontFamily: 'Noto Sans Thai',
                                         fontSize: 13,
                                         color: Color(0xFFAAAAAA),
                                       ),
@@ -383,7 +385,7 @@ class _MapScreenState extends State<MapScreen> {
                                       Text(
                                         _currentAddressText,
                                         style: const TextStyle(
-                                          fontFamily: 'Prompt',
+                                          fontFamily: 'Noto Sans Thai',
                                           fontSize: 13,
                                           fontWeight: FontWeight.w500,
                                           color: Color(0xFF000000),
@@ -394,7 +396,7 @@ class _MapScreenState extends State<MapScreen> {
                                         Text(
                                           _detailAddress,
                                           style: const TextStyle(
-                                            fontFamily: 'Prompt',
+                                            fontFamily: 'Noto Sans Thai',
                                             fontSize: 12,
                                             color: Color(0xFF888888),
                                           ),
@@ -434,7 +436,7 @@ class _MapScreenState extends State<MapScreen> {
                           child: const Text(
                             'เลือก',
                             style: TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 16,
                               color: Colors.white,
                             ),

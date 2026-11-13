@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
+import '../widgets/keyboard_safe_scroll.dart';
+
 class ChangePasswordScreen extends StatefulWidget {
   final VoidCallback? onBack;
-  final VoidCallback? onContinue;
+
+  /// ส่งรหัสผ่านเดิมที่กรอกออกไปให้ขั้นถัดไป
+  final ValueChanged<String>? onContinue;
   final VoidCallback? onForgotPassword;
 
   const ChangePasswordScreen({
@@ -32,16 +37,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
+              child: KeyboardSafeScroll(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                child: Column(
+                content: Column(
                   children: [
                     // Lock icon
                     SvgPicture.asset(
@@ -55,7 +58,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     const Text(
                       'ยืนยันรหัสผ่านเดิม',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -68,7 +71,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       'เพื่อความปลอดภัย กรุณากรอกรหัสผ่าน\nปัจจุบันของคุณก่อน',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Colors.black.withValues(alpha: 0.35),
                         height: 1.5,
@@ -82,7 +85,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       child: Text(
                         'รหัสผ่านเดิม',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFF000000),
                         ),
@@ -91,33 +94,35 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     const SizedBox(height: 8),
 
                     // Password input
-Container(
-                       decoration: BoxDecoration(
-                         color: Colors.white,
-                         borderRadius: BorderRadius.circular(16),
-                         border: Border.all(
-                           color: const Color(0xFFD9D9D9),
-                           width: 1,
-                         ),
-                       ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFD9D9D9),
+                          width: 1,
+                        ),
+                      ),
                       child: TextField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           color: Color(0xFF000000),
                         ),
                         decoration: InputDecoration(
                           hintText: 'กรุณากรอกรหัสผ่าน',
                           hintStyle: const TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 15,
                             color: Color(0xFFD9D9D9),
                           ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscurePassword
@@ -127,7 +132,8 @@ Container(
                               size: 20,
                             ),
                             onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                       ),
@@ -142,7 +148,7 @@ Container(
                         child: const Text(
                           'ลืมรหัสผ่าน',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 13,
                             color: Color(0xFF4F8FDB),
                           ),
@@ -151,41 +157,44 @@ Container(
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            // ดำเนินการต่อ button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _passwordController,
-                builder: (context, value, _) {
-                  final isValid = value.text.isNotEmpty;
-                  return SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: isValid ? widget.onContinue : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F8FDB),
-                        disabledBackgroundColor:
-                            const Color(0xFF4F8FDB).withValues(alpha: 0.4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                bottom: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _passwordController,
+                    builder: (context, value, _) {
+                      final isValid = value.text.isNotEmpty;
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: isValid
+                              ? () => widget.onContinue?.call(
+                                  _passwordController.text,
+                                )
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4F8FDB),
+                            disabledBackgroundColor: const Color(
+                              0xFF4F8FDB,
+                            ).withValues(alpha: 0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'ดำเนินการต่อ',
+                            style: TextStyle(
+                              fontFamily: 'Noto Sans Thai',
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'ดำเนินการต่อ',
-                        style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ],
@@ -203,7 +212,7 @@ Container(
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -212,8 +221,9 @@ Container(
               child: Text(
                 'เปลี่ยนรหัสผ่าน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

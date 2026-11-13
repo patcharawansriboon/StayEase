@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../edite_announce.dart';
 import '../../services/tenant_auth_service.dart';
 
+import '../widgets/app_sizes.dart';
 class AnnounceDetailsScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final String? imagePath;
   final String title;
   final String detail;
   final String date;
+  final String endDate; // yyyy-mm-dd (ว่าง = ไม่กำหนด)
   final bool isAdmin;
-  final VoidCallback? onEdit;
+  final void Function({String? announcementId, Map<String, String>? initialData})? onEdit;
   final VoidCallback? onDelete;
   final String? announcementId;
 
@@ -20,6 +21,7 @@ class AnnounceDetailsScreen extends StatelessWidget {
     this.title = '',
     this.detail = '',
     this.date = '',
+    this.endDate = '',
     this.isAdmin = false,
     this.onEdit,
     this.onDelete,
@@ -35,21 +37,12 @@ class AnnounceDetailsScreen extends StatelessWidget {
       'title': title,
       'content': detail,
       'image': imagePath ?? '',
+      'end_date': endDate,
     };
     
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditeAnnounceScreen(
-          announcementId: announcementId,
-          initialData: initialData,
-          onBack: () => Navigator.pop(context),
-          onSave: () {
-            Navigator.pop(context);
-            onEdit?.call();
-          },
-        ),
-      ),
+    onEdit?.call(
+      announcementId: announcementId,
+      initialData: initialData,
     );
   }
 
@@ -58,19 +51,84 @@ class AnnounceDetailsScreen extends StatelessWidget {
     
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ยืนยันการลบ', style: TextStyle(fontFamily: 'Prompt')),
-        content: const Text('ต้องการลบประกาศนี้ใช่หรือไม่?', style: TextStyle(fontFamily: 'Prompt')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก', style: TextStyle(fontFamily: 'Prompt')),
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'ยืนยันการลบ',
+                style: TextStyle(
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'ต้องการลบประกาศนี้ใช่หรือไม่?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: 13,
+                  color: Color(0xFF667085),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF4F8FDB)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      child: const Text(
+                        'ยกเลิก',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 14,
+                          color: Color(0xFF4F8FDB),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF0303),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'ลบ',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('ลบ', style: TextStyle(fontFamily: 'Prompt', color: Color(0xFFE05C5C))),
-          ),
-        ],
+        ),
       ),
     );
     
@@ -78,17 +136,12 @@ class AnnounceDetailsScreen extends StatelessWidget {
       final success = await TenantAuthService().deleteAnnouncement(announcementId!);
       if (context.mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ลบประกาศสำเร็จ', style: TextStyle(fontFamily: 'Prompt')),
-              backgroundColor: Color(0xFF4CAF50),
-            ),
-          );
+          // ลบ SnackBar หลังจากลบสำเร็จ (ไม่แสดงแถบแจ้งเตือน)
           onDelete?.call();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('ลบไม่สำเร็จ กรุณาลองใหม่', style: TextStyle(fontFamily: 'Prompt')),
+              content: Text('ลบไม่สำเร็จ กรุณาลองใหม่', style: TextStyle(fontFamily: 'Noto Sans Thai')),
               backgroundColor: Color(0xFFF16C6C),
             ),
           );
@@ -143,7 +196,7 @@ class AnnounceDetailsScreen extends StatelessWidget {
                               Text(
                                 title.isNotEmpty ? title : 'ประกาศ',
                                 style: const TextStyle(
-                                  fontFamily: 'Prompt',
+                                  fontFamily: 'Noto Sans Thai',
                                   fontSize: 20,
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFF1A1A2E),
@@ -159,7 +212,7 @@ class AnnounceDetailsScreen extends StatelessWidget {
                                     Text(
                                       date,
                                       style: const TextStyle(
-                                        fontFamily: 'Prompt',
+                                        fontFamily: 'Noto Sans Thai',
                                         fontSize: 13,
                                         color: Color(0xFF888888),
                                       ),
@@ -206,7 +259,7 @@ class AnnounceDetailsScreen extends StatelessWidget {
                         const Text(
                           'รายละเอียด',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF1A1A2E),
@@ -216,7 +269,7 @@ class AnnounceDetailsScreen extends StatelessWidget {
                         Text(
                           detail.isNotEmpty ? detail : '-',
                           style: const TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF555555),
                             height: 1.7,
@@ -231,12 +284,12 @@ class AnnounceDetailsScreen extends StatelessWidget {
             ),
           ),
 
-          // Admin-only: แก้ไข + ลบโพสต์
+          // Admin-only: แก้ไข + ลบประกาศ
+          // ตำแหน่งเดียวกับปุ่ม "บันทึก" หน้าตั้งค่าหอพัก (ซ้ายขวา 16, ห่างขอบล่าง 32)
+          // ไม่ใช้ SafeArea เพื่อให้ตรงกันทุกอุปกรณ์
           if (isAdmin)
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                 child: Row(
                   children: [
                     Expanded(
@@ -254,7 +307,7 @@ class AnnounceDetailsScreen extends StatelessWidget {
                           child: const Text(
                             'แก้ไข',
                             style: TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF4F8FDB),
@@ -270,16 +323,16 @@ class AnnounceDetailsScreen extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: () => _handleDelete(context),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE05C5C),
+                            backgroundColor: const Color(0xFFFF0303),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                             elevation: 0,
                           ),
                           child: const Text(
-                            'ลบโพสต์',
+                            'ลบประกาศ',
                             style: TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: Colors.white,
@@ -291,7 +344,6 @@ class AnnounceDetailsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
         ],
       ),
     );
@@ -333,16 +385,16 @@ class AnnounceDetailsScreen extends StatelessWidget {
           GestureDetector(
             onTap: onBack,
             child: const Icon(Icons.chevron_left,
-                size: 28, color: Color(0xFF1A1A2E)),
+                size: kBackIconSize, color: Color(0xFF1A1A2E)),
           ),
           const Expanded(
             child: Center(
               child: Text(
                   'รายละเอียดประกาศ',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF1A1A2E),
                 ),
               ),

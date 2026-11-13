@@ -64,7 +64,7 @@ class SelectDormitoryScreen extends StatelessWidget {
                   Text.rich(
                     TextSpan(
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -78,36 +78,19 @@ class SelectDormitoryScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'คุณต้องการใช้งานแบบไหน?',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 15,
-                      color: Color(0xFF666666),
-                    ),
-                  ),
+                   const SizedBox(height: 12),
 
                   const Spacer(flex: 2),
 
-                  // การ์ด สร้างหอพักใหม่
-                  _buildOptionCard(
-                    icon: Icons.add,
-                    title: 'สร้างหอพักใหม่',
-                    description: 'สำหรับเจ้าของหอพัก\nที่ต้องการเริ่มใช้งานระบบ',
-                    onTap: onCreateDormitory,
-                  ),
-                  const SizedBox(height: 16),
+                   // การ์ด สร้างหอพักใหม่
+                   _buildOptionCard(
+                     icon: Icons.add,
+                     title: 'สร้างหอพักใหม่',
+                     description: 'สำหรับเจ้าของหอพัก\nที่ต้องการเริ่มใช้งานระบบ',
+                     onTap: onCreateDormitory,
+                   ),
 
-                  // การ์ด เข้าร่วมหอพัก
-                  _buildOptionCard(
-                    icon: Icons.search,
-                    title: 'เข้าร่วมหอพัก',
-                    description: 'ใช้รหัสหอพักที่ได้รับ\nจากเจ้าของหอพัก',
-                    onTap: onJoinDormitory,
-                  ),
-
-                  const Spacer(flex: 3),
+                   const Spacer(flex: 3),
                 ],
               ),
             ),
@@ -152,7 +135,7 @@ class SelectDormitoryScreen extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF000000),
@@ -162,7 +145,7 @@ class SelectDormitoryScreen extends StatelessWidget {
                   Text(
                     description,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 12,
                       color: Color(0xFF999999),
                       height: 1.4,

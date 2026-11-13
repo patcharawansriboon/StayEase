@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/room_members_service.dart';
 import 'dart:math';
 
+import '../widgets/app_sizes.dart';
 class InvitationCodeScreen extends StatefulWidget {
   final VoidCallback? onBack;
 
@@ -53,7 +54,7 @@ class InvitationCodeScreenState extends State<InvitationCodeScreen> {
         .from('dormitory_members')
         // หมายเหตุ: dormitories() ไม่มีคอลัมน์ dormitory_id (อยู่ที่ dormitory_members)
         // เลือกที่นี่นอกวงเล็บแล้ว
-        .select('id, dormitory_id, room_id, dormitories(dorm_name, dorm_code)')
+        .select('id, dormitory_id, room_id, dormitories!dormitory_members_dormitory_id_fkey(dorm_name, dorm_code)')
         .eq('user_id', uid)
         .eq('status', 'approved')
         .limit(1)
@@ -280,7 +281,7 @@ class InvitationCodeScreenState extends State<InvitationCodeScreen> {
                       'สร้างรหัสเชิญเพื่อให้ผู้พักอาศัยเข้าร่วมห้องของคุณ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Colors.black.withValues(alpha: 0.45),
                       ),
@@ -290,7 +291,7 @@ class InvitationCodeScreenState extends State<InvitationCodeScreen> {
                       textAlign: TextAlign.center,
                       text: TextSpan(
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Colors.black.withValues(alpha: 0.45),
                         ),
@@ -326,7 +327,7 @@ Container(
                                 : Text(
                                     _code ?? '-',
                                     style: const TextStyle(
-                                      fontFamily: 'Prompt',
+                                      fontFamily: 'Noto Sans Thai',
                                       fontSize: 32,
                                       fontWeight: FontWeight.w500,
                                       letterSpacing: 2,
@@ -357,7 +358,7 @@ Container(
                         _error,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFFFF0303),
                         ),
@@ -390,7 +391,7 @@ Container(
                   child: const Text(
                     'สร้างใหม่',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 16,
                       color: Colors.white,
                     ),
@@ -413,7 +414,7 @@ Container(
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -422,8 +423,9 @@ Container(
               child: Text(
                 'สร้างรหัสเชิญ Roommate',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

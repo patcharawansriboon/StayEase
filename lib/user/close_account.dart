@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class CloseAccountScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onCloseAccount;
@@ -47,7 +48,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                     const Text(
                       'การปิดบัญชีเป็นการดำเนินการถาวร',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFFF16C6C),
@@ -58,7 +59,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                       'เมื่อปิดบัญชี คุณจะไม่สามารถ\nเข้าสู่ระบบ StayEase ได้อีก',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Colors.black.withValues(alpha: 0.45),
                         height: 1.5,
@@ -80,7 +81,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                           const Text(
                             'สิ่งที่จะเกิดขึ้น',
                             style: TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF000000),
@@ -141,7 +142,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                   const Text(
                     'ฉันเข้าใจและต้องการปิดบัญชี',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 13,
                       color: Color(0xFF000000),
                     ),
@@ -159,9 +160,9 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                 child: ElevatedButton(
                   onPressed: _confirmed ? widget.onCloseAccount : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF16C6C),
+                    backgroundColor: const Color(0xFFFF0303),
                     disabledBackgroundColor:
-                        const Color(0xFFF16C6C).withValues(alpha: 0.4),
+                        const Color(0xFFFF0303).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -170,7 +171,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
                   child: const Text(
                     'ปิดบัญชี',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 16,
                       color: Colors.white,
                     ),
@@ -192,7 +193,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
         Text(
           text,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 12,
             color: Color(0xFF555555),
           ),
@@ -210,7 +211,7 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -219,8 +220,9 @@ class _CloseAccountScreenState extends State<CloseAccountScreen> {
               child: Text(
                 'ปิดบัญชีการใช้งาน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

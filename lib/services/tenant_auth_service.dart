@@ -79,7 +79,7 @@ class TenantAuthService {
         'phone': phone,
         'role': 'tenant',
         'avatar_url': avatarUrl,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       // ตรวจสอบว่าเคยส่งคำขอสำหรับหอพักนี้แล้วหรือยัง
@@ -107,7 +107,7 @@ class TenantAuthService {
         'user_id': uid,
         'dormitory_id': dormitoryId,
         'status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       return true;
@@ -149,7 +149,7 @@ class TenantAuthService {
 
       final row = await _db
           .from('dormitory_members')
-          .select('status, dormitory_id, dormitories(dorm_name, dorm_code)')
+          .select('status, dormitory_id, dormitories!dormitory_members_dormitory_id_fkey(dorm_name, dorm_code)')
           .eq('user_id', uid)
           .order('created_at', ascending: false)
           .limit(1)
@@ -295,7 +295,7 @@ class TenantAuthService {
       if (uid == null) return [];
       final rows = await _db
           .from('repairs')
-          .select('id, room_number, title, description, created_at, status')
+          .select('id, room_number, category, description, created_at, status')
           .eq('user_id', uid)
           .order('created_at', ascending: false)
           .limit(20);
@@ -303,7 +303,7 @@ class TenantAuthService {
           .map((r) => {
                 'id': r['id'],
                 'room': r['room_number'] ?? '',
-                'title': r['title'] ?? '',
+                'title': r['category'] ?? '',
                 'description': r['description'] ?? '',
                 'date': r['created_at'] ?? '',
                 'status': r['status'] ?? '',
@@ -324,22 +324,77 @@ class TenantAuthService {
         'admin_uid': uid,
       });
 
-      return (rows as List).map((r) => {
-        'id': r['member_id']?.toString() ?? '',
-        'name': r['name'] ?? '',
-        'phone': r['phone']?.toString() ?? '',
-        'room': r['room_number']?.toString() ?? '',
-        'role': r['role'] == 'tenant' ? 'ผู้เช่าหลัก' : 'Roommate',
-        'status': r['status'] == 'approved' ? 'กำลังเช่า' :
-                  r['status'] == 'pending'  ? 'รอการอนุมัติ' : 'ไม่ได้รับอนุมัติ',
-        'member_id': r['member_id']?.toString() ?? '',
-        'building': r['building']?.toString() ?? '',
-        'floor': r['floor']?.toString() ?? '',
-        'check_in':  '',
-        'check_out': '',
-        'rent':    '',
-        'deposit': '',
-      }).toList();
+      final result = <Map<String, dynamic>>[];
+      for (final r in (rows as List)) {
+        final memberId = r['member_id']?.toString() ?? r['id']?.toString() ?? '';
+        String avatarUrl = r['avatar_url']?.toString() ?? r['avatar']?.toString() ?? '';
+
+        if (avatarUrl.isEmpty && memberId.isNotEmpty) {
+          try {
+            final memberRow = await _db
+                .from('dormitory_members')
+                .select('user_id')
+                .eq('id', memberId)
+                .maybeSingle();
+            final userId = memberRow?['user_id']?.toString();
+            if (userId != null && userId.isNotEmpty) {
+              final tenantRow = await _db
+                  .from('tenants')
+                  .select('avatar_url')
+                  .eq('id', userId)
+                  .maybeSingle();
+              avatarUrl = tenantRow?['avatar_url']?.toString() ?? '';
+
+              if (avatarUrl.isEmpty) {
+                final roommateRow = await _db
+                    .from('roommate_invites')
+                    .select('avatar_url')
+                    .eq('id', userId)
+                    .maybeSingle();
+                avatarUrl = roommateRow?['avatar_url']?.toString() ?? '';
+              }
+
+              if (avatarUrl.isEmpty) {
+                final profileRow = await _db
+                    .from('profiles')
+                    .select('avatar_url')
+                    .eq('id', userId)
+                    .maybeSingle();
+                avatarUrl = profileRow?['avatar_url']?.toString() ?? '';
+              }
+
+              if (avatarUrl.isEmpty) {
+                final userRow = await _db.auth.admin.getUserById(userId);
+                final meta = userRow.user?.userMetadata ?? {};
+                avatarUrl = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
+              }
+            }
+          } catch (e) {
+            // ignore avatar fetch errors
+          }
+        }
+
+        result.add({
+          'id': memberId,
+          'name': r['name'] ?? r['full_name'] ?? '',
+          'phone': r['phone']?.toString() ?? '',
+          'room': r['room_number']?.toString() ?? r['room']?.toString() ?? '',
+          'role': r['role'] == 'tenant' ? 'ผู้เช่าหลัก' : (r['role'] == 'roommate' ? 'Roommate' : (r['role'] ?? '')),
+          'status': r['status'] == 'approved' ? 'กำลังเช่า' :
+                    r['status'] == 'pending'  ? 'รอการอนุมัติ' : (r['status'] == 'rejected' ? 'ไม่ได้รับอนุมัติ' : (r['status'] ?? '')),
+          'member_id': memberId,
+          'building': r['building']?.toString() ?? '',
+          'floor': r['floor']?.toString() ?? '',
+          'check_in':  r['check_in']?.toString() ?? r['check_in_date']?.toString() ?? '',
+          'check_out': r['check_out']?.toString() ?? r['check_out_date']?.toString() ?? '',
+          'rent':    r['rent']?.toString() ?? '',
+          'deposit': r['deposit']?.toString() ?? '',
+          'avatar_url': avatarUrl,
+          'user_id': r['user_id']?.toString() ?? '',
+        });
+      }
+
+      return result;
     } catch (e) {
       print('❌ getDormitoryTenants error: $e');
       return [];
@@ -363,7 +418,7 @@ class TenantAuthService {
       // ดึงเลขห้องจาก dormitory_members → rooms (ข้อมูลที่ผู้เช่ากรอกตอน sign up)
       final memberRow = await _db
           .from('dormitory_members')
-          .select('room_id, rooms(room_number, floor, building)')
+          .select('room_id, rooms!dormitory_members_room_id_fkey(room_number, floor, building)')
           .eq('user_id', uid)
           .maybeSingle();
 
@@ -404,6 +459,8 @@ class TenantAuthService {
   // ── 14. บันทึกข้อมูลส่วนตัวของผู้เช่า ───────────────────────────────────────
   /// บันทึกข้อมูลที่ผู้เช่ากรอกในหน้าแก้ไขข้อมูลการเช่า
   /// ใช้ member_id = auth user ID (สอดคล้องกับ getTenantRentalInfo)
+  /// [name] / [phone] → อัปเดตชื่อ-เบอร์ในตารางที่ผู้เช่าของตัวเองอยู่
+  ///   (ผู้เช่าหลัก = tenants, Roommate = roommate_invites)
   Future<bool> saveTenantPersonalInfo({
     required String idCard,
     required String birthdate,
@@ -411,6 +468,8 @@ class TenantAuthService {
     required String address,
     required String emergencyContact,
     required String emergencyPhone,
+    String? name,
+    String? phone,
     String? documents,
   }) async {
     try {
@@ -431,10 +490,38 @@ class TenantAuthService {
 
       await _db.from('tenant_rentals').upsert(data);
 
+      // อัปเดตชื่อ-เบอร์ให้ตรงกับที่ผู้เช่ากรอก
+      await _updateContactInfo(uid, name, phone);
+
       return true;
     } catch (e) {
       print('❌ saveTenantPersonalInfo error: $e');
       return false;
+    }
+  }
+
+  /// อัปเดตชื่อ/เบอร์ของผู้เช่าปัจจุบัน
+  /// (ผู้เช่าหลักเก็บใน tenants, Roommate เก็บใน roommate_invites → อัปเดตทั้งสองตาราง)
+  Future<void> _updateContactInfo(
+      String uid, String? name, String? phone) async {
+    final patch = <String, String>{};
+    if (name != null && name.trim().isNotEmpty) {
+      patch['full_name'] = name.trim();
+    }
+    if (phone != null && phone.trim().isNotEmpty) {
+      patch['phone'] = phone.trim();
+    }
+    if (patch.isEmpty) return;
+
+    try {
+      await _db.from('tenants').update(patch).eq('id', uid);
+    } catch (e) {
+      print('⚠️ update tenants error: $e');
+    }
+    try {
+      await _db.from('roommate_invites').update(patch).eq('id', uid);
+    } catch (e) {
+      print('⚠️ update roommate_invites error: $e');
     }
   }
 
@@ -465,13 +552,12 @@ class TenantAuthService {
   }
 
   // ── 16. บันทึก/อัปเดตประกาศ ───────────────────────────────────────────────
-  /// สำหรับแอดมินสร้าง/แก้ไขประกาศ
   Future<bool> saveAnnouncement({
     required String title,
     required String content,
     String? imageUrl,
     required String dormitoryId,
-    String? announcementId, // null = create new, non-null = update
+    String? announcementId,
     bool isDraft = false,
     DateTime? startDate,
     DateTime? endDate,
@@ -480,7 +566,7 @@ class TenantAuthService {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return false;
 
-      final data = {
+      final data = <String, dynamic>{
         'title': title,
         'content': content,
         'image_url': imageUrl,
@@ -489,15 +575,13 @@ class TenantAuthService {
         'status': isDraft ? 'draft' : 'published',
         'start_date': startDate?.toIso8601String().split('T').first,
         'end_date': endDate?.toIso8601String().split('T').first,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       if (announcementId != null && announcementId.isNotEmpty) {
-        // Update existing
         await _db.from('announcements').update(data).eq('id', announcementId);
       } else {
-        // Create new
-        data['created_at'] = DateTime.now().toIso8601String();
+        data['created_at'] = DateTime.now().toUtc().toIso8601String();
         await _db.from('announcements').insert(data);
       }
 
@@ -509,13 +593,11 @@ class TenantAuthService {
   }
 
   // ── 17. ลบประกาศ ─────────────────────────────────────────────────────────
-  /// ลบประกาศจากฐานข้อมูล
   Future<bool> deleteAnnouncement(String announcementId) async {
     try {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) return false;
 
-      // ตรวจสอบว่าเป็นเจ้าของประกาศหรือเป็นแอดมินของหอพัก
       final announcement = await _db
           .from('announcements')
           .select('dormitory_id, created_by')
@@ -527,7 +609,6 @@ class TenantAuthService {
       final dormitoryId = announcement['dormitory_id'] as String;
       final createdBy = announcement['created_by'] as String;
 
-      // ตรวจสอบว่าเป็นผู้สร้างประกาศหรือแอดมินของหอพัก
       final dorm = await _db
           .from('dormitories')
           .select('created_by')

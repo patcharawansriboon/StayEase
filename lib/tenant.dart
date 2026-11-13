@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/tenant_auth_service.dart';
 
+import 'widgets/app_sizes.dart';
 class TenantScreen extends StatefulWidget {
   final VoidCallback? onNavigateToDashboard;
   final VoidCallback? onNavigateToMasterTenant;
@@ -10,8 +12,10 @@ class TenantScreen extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final VoidCallback? onNavigateToBill;
   final VoidCallback? onNavigateToAnnounce;
-  final void Function(int index)? selectedTenantIndex;
-  final VoidCallback? onTenantSelected;
+
+  /// แจ้งสมาชิกที่ถูกเลือก (พร้อมข้อมูลเต็ม + index ของรายการ)
+  /// ข้อมูลมาจาก RPC ที่หน้านี้โหลดเอง → ผู้เช่าหลักและ Roommate ไม่สับสนกัน
+  final void Function(Map<String, String> tenant, int index)? onTenantSelected;
   final List<Map<String, String>> tenants;
 
   const TenantScreen({
@@ -23,65 +27,127 @@ class TenantScreen extends StatefulWidget {
     this.onNavigateToProfile,
     this.onNavigateToBill,
     this.onNavigateToAnnounce,
-    this.selectedTenantIndex,
     this.onTenantSelected,
     this.tenants = const [],
   });
 
   @override
-  State<TenantScreen> createState() => _TenantScreenState();
+  State<TenantScreen> createState() => TenantScreenState();
 }
 
-class _TenantScreenState extends State<TenantScreen> {
+class TenantScreenState extends State<TenantScreen> {
   final _searchController = TextEditingController();
   String _filter = 'ทั้งหมด';
+  String _keyword = '';
   List<Map<String, String>> _tenants = [];
   bool _loading = true;
+  RealtimeChannel? _tenantChannel;
 
   @override
   void initState() {
     super.initState();
-    _loadTenants();
+    _loadTenants().then((_) => _subscribeTenantChanges());
+  }
+
+  /// โหลดรายชื่อใหม่ (ผู้เช่าหลัก + Roommate) จาก RPC
+  Future<void> refresh() async {
+    if (mounted) setState(() => _loading = true);
+    await _loadTenants();
   }
 
   Future<void> _loadTenants() async {
-    final service = TenantAuthService();
-    final rows = await service.getDormitoryTenants();
-    if (rows.isNotEmpty) {
-      _tenants = rows.map((r) => {
-        'name': r['name']?.toString() ?? '',
-        'room': r['room']?.toString() ?? '',
-        'role': r['role']?.toString() ?? '',
-        'phone': r['phone']?.toString() ?? '',
-        'status': r['status']?.toString() ?? '',
-        'member_id': r['member_id']?.toString() ?? '',
-        'building': r['building']?.toString() ?? '',
-        'floor': r['floor']?.toString() ?? '',
-        'check_in': r['check_in']?.toString() ?? '',
-        'check_out': r['check_out']?.toString() ?? '',
-        'rent': r['rent']?.toString() ?? '',
-        'deposit': r['deposit']?.toString() ?? '',
-      }).toList();
-    } else {
-      _tenants = widget.tenants.isNotEmpty
-          ? widget.tenants
-          : [];
+    try {
+      final service = TenantAuthService();
+      final rows = await service.getDormitoryTenants();
+      if (rows.isNotEmpty) {
+        _tenants = rows.map((r) => {
+              'name': r['name']?.toString() ?? '',
+              'room': r['room']?.toString() ?? '',
+              'role': r['role']?.toString() ?? '',
+              'phone': r['phone']?.toString() ?? '',
+              'status': r['status']?.toString() ?? '',
+              'member_id': r['member_id']?.toString() ?? '',
+              'building': r['building']?.toString() ?? '',
+              'floor': r['floor']?.toString() ?? '',
+              'check_in': r['check_in']?.toString() ?? '',
+              'check_out': r['check_out']?.toString() ?? '',
+              'rent': r['rent']?.toString() ?? '',
+              'deposit': r['deposit']?.toString() ?? '',
+              'avatar_url': r['avatar_url']?.toString() ?? '',
+            }).toList();
+      }
+    } catch (e) {
+      print('❌ _loadTenants error: $e');
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// ฟังการเปลี่ยนแปลง avatar ของผู้เช่าแบบ real-time
+  /// เมื่อมีการอัปเดตรูปในตาราง tenants หรือ roommate_invites ให้โหลดรายการใหม่
+  void _subscribeTenantChanges() {
+    final client = Supabase.instance.client;
+
+    _tenantChannel = client.channel('realtime:tenant_avatars');
+
+    final channel = _tenantChannel!;
+    channel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'tenants',
+      callback: (payload) async {
+        final changedId = payload.newRecord['id']?.toString() ?? '';
+        if (changedId.isNotEmpty &&
+            _tenants.any((t) => t['member_id'] == changedId)) {
+          if (mounted) await _loadTenants();
+        }
+      },
+    )
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'roommate_invites',
+      callback: (payload) async {
+        final changedId = payload.newRecord['id']?.toString() ?? '';
+        if (changedId.isNotEmpty &&
+            _tenants.any((t) => t['member_id'] == changedId)) {
+          if (mounted) await _loadTenants();
+        }
+      },
+    )
+        .subscribe();
   }
 
   @override
   void didUpdateWidget(covariant TenantScreen old) {
     super.didUpdateWidget(old);
-    if (widget.tenants.isNotEmpty) {
-      _tenants = widget.tenants;
-    }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tenantChannel?.unsubscribe();
     super.dispose();
+  }
+
+  /// รายการที่ผ่านการค้นหา + ตัวกรอง
+  List<Map<String, String>> get _visibleTenants {
+    final keyword = _keyword.trim().toLowerCase();
+    return _tenants.where((t) {
+      final matchFilter = switch (_filter) {
+        'กำลังเช่า' => t['status'] == 'กำลังเช่า',
+        'ว่าง/รอ' => t['status'] != 'กำลังเช่า',
+        _ => true,
+      };
+      if (!matchFilter) return false;
+      if (keyword.isEmpty) return true;
+      final name = (t['name'] ?? '').toLowerCase();
+      final room = (t['room'] ?? '').toLowerCase();
+      final phone = (t['phone'] ?? '').toLowerCase();
+      return name.contains(keyword) ||
+          room.contains(keyword) ||
+          phone.contains(keyword);
+    }).toList();
   }
 
   @override
@@ -99,8 +165,8 @@ class _TenantScreenState extends State<TenantScreen> {
                   const Text(
                     'ผู้เช่า',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 20,
+                      fontFamily: 'Noto Sans Thai',
+                      fontSize: kPageTitleFontSize,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF4181CB),
                     ),
@@ -108,7 +174,7 @@ class _TenantScreenState extends State<TenantScreen> {
                   const Text(
                     'จัดการข้อมูลผู้เช่าทั้งหมด',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 13,
                       color: Color(0xFF8AA0BE),
                     ),
@@ -116,19 +182,25 @@ class _TenantScreenState extends State<TenantScreen> {
                   const SizedBox(height: 14),
                   _buildSearchBar(),
                   const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _buildAddButton(),
-                  ),
-                  const SizedBox(height: 12),
                   _buildStatBar(),
                   const SizedBox(height: 12),
                   _buildFilters(),
                   const SizedBox(height: 12),
-                  ..._tenants
-                      .where((t) =>
-                          _filter == 'ทั้งหมด' || t['status'] == _filter)
-                      .map(_buildTenantCard),
+                  ..._visibleTenants.map(_buildTenantCard),
+                  if (_visibleTenants.isEmpty && !_loading)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Center(
+                          child: Text(
+                            'ยังไม่มีผู้เช่าในหอพัก',
+                            style: TextStyle(
+                            fontFamily: 'Noto Sans Thai',
+                            fontSize: 14,
+                            color: Colors.black.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -161,12 +233,13 @@ class _TenantScreenState extends State<TenantScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
+              onChanged: (value) => setState(() => _keyword = value),
               style: const TextStyle(
-                  fontFamily: 'Prompt', fontSize: 14, color: Color(0xFF000000)),
+                  fontFamily: 'Noto Sans Thai', fontSize: 14, color: Color(0xFF000000)),
               decoration: const InputDecoration(
                 hintText: 'ค้นหาชื่อหรือเลขห้อง',
                 hintStyle: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     color: Color(0xFFAAAAAA)),
                 isCollapsed: true,
@@ -175,32 +248,6 @@ class _TenantScreenState extends State<TenantScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAddButton() {
-    return SizedBox(
-      height: 28,
-      child: ElevatedButton.icon(
-        onPressed: () {},
-        icon: const Icon(Icons.add, size: 14, color: Colors.white),
-        label: const Text(
-          'เพิ่มผู้เช่า',
-          style: TextStyle(
-            fontFamily: 'Prompt',
-            fontSize: 12,
-            color: Colors.white,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF4181CB),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        ),
       ),
     );
   }
@@ -272,7 +319,7 @@ class _TenantScreenState extends State<TenantScreen> {
               Text(
                 number,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF000000),
@@ -281,7 +328,7 @@ class _TenantScreenState extends State<TenantScreen> {
               Text(
                 label,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 12,
                   color: Color(0xFF666666),
                 ),
@@ -335,7 +382,7 @@ class _TenantScreenState extends State<TenantScreen> {
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 13,
                     fontWeight:
                         selected ? FontWeight.w600 : FontWeight.w400,
@@ -355,8 +402,7 @@ class _TenantScreenState extends State<TenantScreen> {
     final index = _tenants.indexOf(t);
     return GestureDetector(
       onTap: () {
-        widget.selectedTenantIndex?.call(index);
-        widget.onTenantSelected?.call();
+        widget.onTenantSelected?.call(t, index);
         widget.onNavigateToMasterTenant?.call();
       },
       child: Container(
@@ -372,10 +418,19 @@ class _TenantScreenState extends State<TenantScreen> {
           Container(
             width: 44,
             height: 44,
-            decoration: const BoxDecoration(
-              color: Color(0xFFD9D9D9),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD9D9D9),
               shape: BoxShape.circle,
+              image: (t['avatar_url']?.isNotEmpty == true)
+                  ? DecorationImage(
+                      image: NetworkImage(t['avatar_url']!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
+            child: (t['avatar_url']?.isNotEmpty != true)
+                ? const Icon(Icons.person, color: Colors.white, size: 24)
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -385,7 +440,7 @@ class _TenantScreenState extends State<TenantScreen> {
                 Text(
                   t['name']!,
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF000000),
@@ -395,7 +450,7 @@ class _TenantScreenState extends State<TenantScreen> {
                 Text.rich(
                   TextSpan(
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 13,
                       color: Color(0xFF4181CB),
                     ),
@@ -413,7 +468,7 @@ class _TenantScreenState extends State<TenantScreen> {
                 Text(
                   t['phone']!,
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Color(0xFF999999),
                   ),
@@ -448,7 +503,7 @@ class _TenantScreenState extends State<TenantScreen> {
       child: Text(
         status,
         style: TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 11,
           color: fg,
         ),

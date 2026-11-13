@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+// เว็บใช้ Tesseract.js (web/meter_ocr.js) / มือถือใช้ ML Kit
+import 'services/web_ocr_stub.dart'
+    if (dart.library.js_interop) 'services/web_ocr_web.dart';
+
+import 'widgets/app_sizes.dart';
 /// หน้าสแกนมิเตอร์ — ถ่ายรูปมิเตอร์ + กรอก/ยืนยันเลขมิเตอร์
 class ScanScreen extends StatefulWidget {
   /// ชื่อมิเตอร์ที่สแกน เช่น "มิเตอร์ไฟฟ้า" / "มิเตอร์น้ำ"
@@ -42,29 +48,93 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Future<void> _takePhoto() async {
-    final picker = ImagePicker();
-    // ถ่ายด้วยความละเอียดสูงเพื่อให้ OCR อ่านเลขได้แม่นขึ้น
-    final picked = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 100,
-      maxWidth: 2000,
-    );
-    if (picked == null) return;
+    Uint8List? bytes;
+    String path = '';
 
-    final bytes = await picked.readAsBytes();
+    // เบราว์เซอร์คอมพิวเตอร์: image_picker แบบกล้องใช้ไม่ได้ (capture ใช้ได้เฉพาะมือถือ)
+    // จึงเปิดเว็บแคมของเครื่องเอง ถ้าเปิดไม่ได้จะสำรองไปใช้ตัวเลือกไฟล์
+    if (kIsWeb && isDesktopWebBrowser()) {
+      try {
+        bytes = await captureWebcamPhoto();
+        if (bytes == null) return; // ผู้ใช้กดยกเลิก
+      } catch (e) {
+        debugPrint('❌ webcam error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'เปิดกล้องไม่ได้ กรุณาเลือกรูปจากเครื่องแทน',
+                style: TextStyle(fontFamily: 'Noto Sans Thai'),
+              ),
+            ),
+          );
+        }
+        final picked = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 100,
+          maxWidth: 2000,
+        );
+        if (picked == null) return;
+        bytes = await picked.readAsBytes();
+        path = picked.path;
+      }
+    } else {
+      final picker = ImagePicker();
+      // ถ่ายด้วยความละเอียดสูงเพื่อให้ OCR อ่านเลขได้แม่นขึ้น
+      final picked = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 100,
+        maxWidth: 2000,
+      );
+      if (picked == null) return;
+      bytes = await picked.readAsBytes();
+      path = picked.path;
+    }
+
     if (!mounted) return;
+    final photo = bytes;
     setState(() {
-      _photoBytes = bytes;
+      _photoBytes = photo;
       _editing = false;
       _ocrError = null;
     });
 
     // อ่านเลขมิเตอร์จากรูปที่ถ่าย
-    await _readMeterFromImage(picked.path);
+    await _readMeterFromImage(path, photo);
+  }
+
+  /// เว็บ: ใช้ Tesseract.js (ML Kit ไม่รองรับเว็บ) อ่านเฉพาะตัวเลขจากรูป
+  Future<void> _readMeterOnWeb(Uint8List bytes) async {
+    setState(() => _reading = true);
+    try {
+      final text = await recognizeDigitsOnWeb(bytes);
+      String? meter;
+      if (text != null) {
+        final candidates = <String>[];
+        for (final line in text.split('\n')) {
+          candidates.addAll(_digitRuns(line));
+          // OCR อาจเว้นวรรคระหว่างหลัก (เช่น "0 4 8 2 7") ลองต่อให้ติดกัน
+          candidates.addAll(_digitRuns(line.replaceAll(RegExp(r'\s'), '')));
+        }
+        meter = _pickBestMeterNumber(candidates);
+      }
+      if (!mounted) return;
+      setState(() {
+        if (meter != null && meter.isNotEmpty) {
+          _digitsController.text = meter;
+          _ocrError = null;
+        } else {
+          _ocrError = 'อ่านเลขมิเตอร์ไม่สำเร็จ กรุณากรอกเอง';
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
   }
 
   /// ใช้ ML Kit OCR อ่านข้อความจากรูป แล้วดึงเฉพาะเลขมิเตอร์
-  Future<void> _readMeterFromImage(String path) async {
+  Future<void> _readMeterFromImage(String path, Uint8List bytes) async {
+    if (kIsWeb) return _readMeterOnWeb(bytes);
     setState(() => _reading = true);
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
@@ -122,10 +192,14 @@ class _ScanScreenState extends State<ScanScreen> {
       }
     }
 
-    // คัดเฉพาะ 3-8 หลัก แล้วเลือกตัวที่ยาวที่สุด (ถ้ายาวเท่ากันเลือกตัวแรก)
+    return _pickBestMeterNumber(candidates);
+  }
+
+  /// คัดเฉพาะ 3-6 หลัก แล้วเลือกตัวที่ยาวที่สุด (ถ้ายาวเท่ากันเลือกตัวแรก)
+  String? _pickBestMeterNumber(List<String> candidates) {
     String? best;
     for (final c in candidates) {
-      if (c.length < 3 || c.length > 8) continue;
+      if (c.length < 3 || c.length > 6) continue;
       if (best == null || c.length > best.length) best = c;
     }
     return best;
@@ -171,15 +245,16 @@ class _ScanScreenState extends State<ScanScreen> {
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: const Icon(Icons.chevron_left,
-                size: 28, color: Color(0xFF1A1A2E)),
+                size: kBackIconSize, color: Color(0xFF1A1A2E)),
           ),
           Expanded(
             child: Center(
               child: Text(
                 widget.meterTitle,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF1A1A2E),
                 ),
               ),
@@ -218,7 +293,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 child: const Text(
                   'ถ่ายรูปมิเตอร์',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 13,
                     color: Colors.white,
                   ),
@@ -244,7 +319,7 @@ class _ScanScreenState extends State<ScanScreen> {
             Text(
               'กำลังอ่านเลขมิเตอร์...',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 14,
                 color: Colors.white,
               ),
@@ -311,7 +386,7 @@ class _ScanScreenState extends State<ScanScreen> {
           const Text(
             'ตรวจพบเลขมิเตอร์',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1A1A2E),
@@ -322,7 +397,7 @@ class _ScanScreenState extends State<ScanScreen> {
             Text(
               _ocrError!,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 12,
                 color: Color(0xFFD32F2F),
               ),
@@ -374,7 +449,7 @@ class _ScanScreenState extends State<ScanScreen> {
               child: const Text(
                 'ยืนยันเลข',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 16,
                   color: Colors.white,
                 ),
@@ -397,7 +472,7 @@ class _ScanScreenState extends State<ScanScreen> {
               child: const Text(
                 'ถ่ายใหม่',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 16,
                   color: Color(0xFF4F8FDB),
                 ),
@@ -431,7 +506,7 @@ class _ScanScreenState extends State<ScanScreen> {
               child: Text(
                 d,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1A1A2E),
@@ -451,12 +526,12 @@ class _ScanScreenState extends State<ScanScreen> {
       keyboardType: TextInputType.number,
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(8),
+        LengthLimitingTextInputFormatter(6),
       ],
       autofocus: true,
       onChanged: (_) => setState(() {}),
       style: const TextStyle(
-        fontFamily: 'Prompt',
+        fontFamily: 'Noto Sans Thai',
         fontSize: 20,
         fontWeight: FontWeight.w600,
         letterSpacing: 8,
@@ -465,7 +540,7 @@ class _ScanScreenState extends State<ScanScreen> {
       decoration: InputDecoration(
         hintText: 'กรอกเลขมิเตอร์',
         hintStyle: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 15,
           letterSpacing: 0,
           color: Color(0xFFAAAAAA),

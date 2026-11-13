@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/mock_service.dart';
+import '../widgets/user_bottom_nav.dart';
 
 class AnnounceScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHome;
@@ -14,6 +16,7 @@ class AnnounceScreen extends StatefulWidget {
   final VoidCallback? onAddAnnouncement;
   final VoidCallback? onNavigateToTenant;
   final VoidCallback? onNavigateToReportRepair;
+  final bool showChatBadge;
 
   const AnnounceScreen({
     super.key,
@@ -28,6 +31,7 @@ class AnnounceScreen extends StatefulWidget {
     this.onAddAnnouncement,
     this.onNavigateToTenant,
     this.onNavigateToReportRepair,
+    this.showChatBadge = false,
   });
 
   @override
@@ -35,11 +39,13 @@ class AnnounceScreen extends StatefulWidget {
 }
 
 class _AnnounceScreenState extends State<AnnounceScreen> {
-  int _selectedIndex = 3;
+  /// ตำแหน่งแท็บ "ประกาศ" (icon_announcement) ในแถบเมนูล่าง
+  static const int _announceTabIndex = 3;
   final _mockService = MockService();
 
   List<Map<String, String>> _announcements = [];
   bool _loading = true;
+  StreamSubscription<List<Map<String, String>>>? _announceSub;
 
   @override
   void initState() {
@@ -56,21 +62,23 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
 
   Future<void> _loadAnnouncements() async {
     try {
-      // ดึงเฉพาะประกาศที่เผยแพร่ (ไม่มีระบบฉบับร่างแล้ว)
+      // ยกเลิก subscription เก่าถ้ามี
+      await _announceSub?.cancel();
+
       String? status = 'published';
       String? dormId;
       if (widget.isAdmin) {
         dormId = await _mockService.getAdminDormitoryId();
       }
 
-      final rows = await _mockService.getAnnouncements(
-        dormitoryId: dormId,
-        status: status,
-      );
-      if (!mounted) return;
-      setState(() {
-        _announcements = rows;
-        _loading = false;
+      _announceSub = _mockService
+          .announcementsStream(dormitoryId: dormId, status: status)
+          .listen((rows) {
+        if (!mounted) return;
+        setState(() {
+          _announcements = rows;
+          _loading = false;
+        });
       });
     } catch (e) {
       if (!mounted) return;
@@ -81,7 +89,14 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
     }
   }
 
-  List<Map<String, String>> get _displayAnnouncements => _announcements;
+  List<Map<String, String>> get _displayAnnouncements =>
+      widget.announcements.isNotEmpty ? widget.announcements : _announcements;
+
+  @override
+  void dispose() {
+    _announceSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,9 +112,9 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
             Expanded(
               child: (!widget.isAdmin && !widget.hasRoom)
                   ? _buildNoRoomEmptyState()
-                  : _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _displayAnnouncements.isEmpty
+              : (_loading && widget.announcements.isEmpty)
+                  ? const Center(child: CircularProgressIndicator())
+                  : _displayAnnouncements.isEmpty
                           ? _buildEmptyAnnouncements()
                           : SingleChildScrollView(
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -128,7 +143,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
         Text(
           'ประกาศ',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 20,
             fontWeight: FontWeight.w700,
             color: Color(0xFF1A1A2E),
@@ -138,7 +153,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
         Text(
           'ข่าวสารและข้อมูลสำคัญจากหอพัก',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 13,
             color: Color(0xFF888888),
           ),
@@ -179,7 +194,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
                     Text(
                       'ประกาศ',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 12,
                         color: Colors.white,
                       ),
@@ -215,7 +230,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
             const Text(
               'ยังไม่มีประกาศ',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1A1A2E),
@@ -226,7 +241,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
               'คุณยังไม่ได้เข้าร่วมห้องพักใด\nจึงยังไม่มีประกาศจากหอพัก',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 14,
                 color: Colors.black.withValues(alpha: 0.45),
                 height: 1.6,
@@ -261,7 +276,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
             Text(
               msg,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1A1A2E),
@@ -306,7 +321,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1A1A2E),
@@ -324,7 +339,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 13,
                             color: Color(0xFF555555),
                           ),
@@ -372,107 +387,15 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
 
   // ---- Tenant Bottom Nav (5 icons) ----
   Widget _buildTenantBottomNav() {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        width: 280,
-        height: 52,
-        decoration: BoxDecoration(
-          color: const Color(0xFF4F8FDB),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 200),
-              left: 11.67 + _selectedIndex * 53.17,
-              top: 4,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFEFFAF),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2.5),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: _buildTenantNavItems(),
-              ),
-            ),
-          ],
-        ),
-      ),
+    // แถบเมนูล่างตัวเดียวกับทุกหน้าหลัก (วงกลมสีเหลืองอยู่ที่ไอคอนประกาศ)
+    return UserBottomNav(
+      selectedIndex: _announceTabIndex,
+      onHome: widget.onNavigateToHome,
+      onBill: widget.onNavigateToRentalFee,
+      onChat: widget.onNavigateToReportRepair ?? widget.onNavigateToChat,
+      onProfile: widget.onNavigateToProfile,
+      showChatBadge: widget.showChatBadge,
     );
-  }
-
-  List<Widget> _buildTenantNavItems() {
-    final items = <IconData?>[
-      null, // index 0 icon_home.svg
-      null, // index 1 icon_bill.svg
-      null, // index 2 icon_message.svg
-      null, // index 3 icon_announcement.svg
-      null, // index 4 icon_user.svg
-    ];
-
-    final svgPaths = <int, String>{
-      0: 'assets/images/icon_home.svg',
-      1: 'assets/images/icon_bill.svg',
-      2: 'assets/images/icon_message.svg',
-      3: 'assets/images/icon_announcement.svg',
-      4: 'assets/images/icon_user.svg',
-    };
-
-    return List.generate(items.length, (i) {
-      final isActive = i == _selectedIndex;
-      return GestureDetector(
-        onTap: () {
-          if (i == 0 && widget.onNavigateToHome != null) {
-            widget.onNavigateToHome!();
-          } else if (i == 1 && widget.onNavigateToRentalFee != null) {
-            widget.onNavigateToRentalFee!();
-          } else if (i == 2 && widget.onNavigateToChat != null) {
-            widget.onNavigateToChat!();
-          } else if (i == 4 && widget.onNavigateToProfile != null) {
-            widget.onNavigateToProfile!();
-          } else {
-            setState(() => _selectedIndex = i);
-          }
-        },
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Center(
-            child: items[i] == null
-                ? SvgPicture.asset(
-                    svgPaths[i]!,
-                    width: 26,
-                    height: 26,
-                    colorFilter: ColorFilter.mode(
-                      isActive ? const Color(0xFF4F8FDB) : Colors.white,
-                      BlendMode.srcIn,
-                    ),
-                  )
-                : Icon(
-                    items[i],
-                    color: isActive ? const Color(0xFF4F8FDB) : Colors.white,
-                    size: 22,
-                  ),
-          ),
-        ),
-      );
-    });
   }
 
   // ---- Admin Bottom Nav (6 icons) ----
@@ -538,7 +461,7 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
       final isActive = i == activeIndex;
       final iconColor = isActive ? const Color(0xFF4F8FDB) : Colors.white;
 
-      final Widget iconWidget = svgPaths.containsKey(i)
+      Widget iconWidget = svgPaths.containsKey(i)
           ? SvgPicture.asset(
               svgPaths[i]!,
               width: 24,
@@ -546,6 +469,30 @@ class _AnnounceScreenState extends State<AnnounceScreen> {
               colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
             )
           : Icon(materialIcons[i], size: 22, color: iconColor);
+
+      // badge จุดแดงที่ไอคอนแจ้งซ่อม (index 3) — ฝั่งแอดมินใช้ showChatBadge เป็น repair badge
+      if (i == 3 && widget.showChatBadge) {
+        iconWidget = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            iconWidget,
+            Positioned(
+              right: -3,
+              top: -3,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: const Color(0xFF4F8FDB), width: 1.5),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
 
       return GestureDetector(
         onTap: () {

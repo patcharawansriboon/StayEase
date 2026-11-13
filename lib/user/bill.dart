@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/app_sizes.dart';
 class BillScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onNavigateToPayment;
   final Map<String, dynamic> currentBill;
   final String userName;
   final String roomNumber;
+  final bool showProofFull;
+  final bool isRoommate;
 
   const BillScreen({
     super.key,
@@ -14,12 +17,44 @@ class BillScreen extends StatelessWidget {
     this.currentBill = const {},
     this.userName = 'พัชราวรรณ  ศรีบุญ',
     this.roomNumber = 'A101',
+    this.showProofFull = false,
+    this.isRoommate = false,
   });
+
+  String get _statusLabel {
+    final status = currentBill['status']?.toString() ?? '';
+    final label = currentBill['status_label']?.toString() ?? '';
+    if (status == 'paid' || label == 'ชำระแล้ว') return 'ชำระแล้ว';
+    return label.isNotEmpty ? label : 'รอชำระ';
+  }
+
+  Color get _statusColor {
+    final status = currentBill['status']?.toString() ?? '';
+    final label = currentBill['status_label']?.toString() ?? '';
+    if (status == 'paid' || label == 'ชำระแล้ว') return const Color(0xFF7ED321);
+    return const Color(0xFFE6A700);
+  }
+
+  String get _proofUrl {
+    return (currentBill['payment_proof_url'] ??
+            currentBill['payment_proof'] ??
+            currentBill['proof_url'])
+        ?.toString() ??
+        '';
+  }
+
+  String get _qrUrl {
+    return (currentBill['qrImageUrl'] ??
+            currentBill['qr_image_url'] ??
+            currentBill['qrUrl'])
+        ?.toString() ??
+        '';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           Padding(
@@ -30,7 +65,7 @@ class BillScreen extends StatelessWidget {
                   onTap: onBack,
                   child: const Icon(
                     Icons.chevron_left,
-                    size: 28,
+                    size: kBackIconSize,
                     color: Color(0xFF000000),
                   ),
                 ),
@@ -42,18 +77,18 @@ class BillScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
               child: Container(
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFD9D9D9)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+                 decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFD9D9D9)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
                 child: Column(
                   children: [
                     const SizedBox(height: 28),
@@ -72,6 +107,26 @@ class BillScreen extends StatelessWidget {
                           _buildInfoRow('ห้อง', roomNumber),
                           const SizedBox(height: 8),
                           _buildInfoRow('รอบบิล', currentBill['month'] ?? 'กรกฎาคม 2569'),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.access_time,
+                                size: 16,
+                                color: Color(0xFFE6A700),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'สถานะ: $_statusLabel',
+                                style: TextStyle(
+                                  fontFamily: 'Noto Sans Thai',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _statusColor,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -108,43 +163,118 @@ class BillScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: _buildAmountRow('ครบกำหนด', currentBill['due_date'] ?? '5 สิงหาคม 2569'),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    // QR / Payment proof
                     GestureDetector(
-                      onTap: onNavigateToPayment,
+                      onTap: (showProofFull || isRoommate) ? null : onNavigateToPayment,
                       child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFEEEEEE)),
-                        ),
+                        padding: showProofFull ? EdgeInsets.zero : const EdgeInsets.all(12),
+                        decoration: showProofFull
+                            ? null
+                            : BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFEEEEEE)),
+                              ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Image.asset(
-                              'assets/images/qr_code_payment-48e4cd.png',
-                              width: 64,
-                              height: 64,
-                              fit: BoxFit.contain,
+                            Builder(
+                              builder: (context) {
+                                final proofUrl = _proofUrl;
+                                final qrUrl = _qrUrl;
+                                final imageSize = showProofFull ? 200.0 : 64.0;
+                                final borderRadius =
+                                    BorderRadius.circular(showProofFull ? 12 : 8);
+                                Widget imageWidget;
+                                if (proofUrl.isNotEmpty) {
+                                  imageWidget = ClipRRect(
+                                    borderRadius: borderRadius,
+                                    child: Image.network(
+                                      proofUrl,
+                                      width: imageSize,
+                                      height: imageSize,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) => qrUrl.isNotEmpty
+                                          ? Image.network(
+                                              qrUrl,
+                                              width: imageSize,
+                                              height: imageSize,
+                                              fit: BoxFit.contain,
+                                            )
+                                          : Image.asset(
+                                              'assets/images/qr_code_payment-48e4cd.png',
+                                              width: imageSize,
+                                              height: imageSize,
+                                              fit: BoxFit.contain,
+                                            ),
+                                    ),
+                                  );
+                                } else if (qrUrl.isNotEmpty) {
+                                  imageWidget = ClipRRect(
+                                    borderRadius: borderRadius,
+                                    child: Image.network(
+                                      qrUrl,
+                                      width: imageSize,
+                                      height: imageSize,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) => Image.asset(
+                                          'assets/images/qr_code_payment-48e4cd.png',
+                                          width: imageSize,
+                                          height: imageSize,
+                                          fit: BoxFit.contain,
+                                        ),
+                                    ),
+                                  );
+                                } else {
+                                  imageWidget = Image.asset(
+                                    'assets/images/qr_code_payment-48e4cd.png',
+                                    width: imageSize,
+                                    height: imageSize,
+                                    fit: BoxFit.contain,
+                                  );
+                                }
+                                if (!showProofFull) return imageWidget;
+                                return GestureDetector(
+                                  onTap: () => _showProofPreview(context),
+                                  child: imageWidget,
+                                );
+                              },
                             ),
                             const SizedBox(height: 6),
-                            const Text(
-                              'QR PromptPay',
-                              style: TextStyle(
-                                fontFamily: 'Prompt',
-                                fontSize: 12,
-                                color: Color(0xFF333333),
+                            if (showProofFull && _proofUrl.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8),
+                                child: Text(
+                                  'กดเพื่อดูหลักฐานการโอน',
+                                  style: TextStyle(
+                                    fontFamily: 'Noto Sans Thai',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF7ED321),
+                                  ),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
                     ),
+                    if (!showProofFull && !isRoommate) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'กรุณากดเพื่อชำระเงิน',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 13,
+                          color: Color(0xFF7ED321),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     const Text(
                       'ขอบคุณที่ใช้บริการ StayEase',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Color(0xFF999999),
                       ),
@@ -177,7 +307,7 @@ class BillScreen extends StatelessWidget {
           child: Text(
             label,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               color: Color(0xFF888888),
             ),
@@ -186,7 +316,7 @@ class BillScreen extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             color: Color(0xFF1A1A2E),
           ),
@@ -195,9 +325,32 @@ class BillScreen extends StatelessWidget {
     );
   }
 
+  void _showProofPreview(BuildContext context) {
+    final proofUrl = _proofUrl;
+    final qrUrl = _qrUrl;
+    final imageUrl = proofUrl.isNotEmpty ? proofUrl : qrUrl;
+    if (imageUrl.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        child: InteractiveViewer(
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Image.asset(
+              'assets/images/qr_code_payment-48e4cd.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAmountRow(String label, String amount, {bool bold = false}) {
     final style = TextStyle(
-      fontFamily: 'Prompt',
+      fontFamily: 'Noto Sans Thai',
       fontSize: 14,
       fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
       color: const Color(0xFF1A1A2E),
