@@ -203,4 +203,113 @@ class RoomMembersService {
       'room': room,
     };
   }
+
+  /// ดึง "ค่าเช่ารายคน" ในห้องของผู้ใช้ปัจจุบัน (ผู้เช่าหลัก + Roommate)
+  ///
+  /// คืนรายการ: {name, phone, role, rent, deposit, isMe, isMainTenant}
+  /// - rent เป็นตัวเลข (double) หรือ null ถ้ายังไม่มีข้อมูล
+  ///
+  /// หมายเหตุ: ตาราง tenant_rentals ถูกล็อกด้วย RLS ให้อ่านได้แค่แถวของตัวเอง
+  /// จึงต้องใช้ RPC `get_room_rent_breakdown` (security definer) ที่อ่านข้าม RLS ได้
+  /// ถ้ายังไม่ได้รัน SQL ใน Supabase (ดู fix-room-rent-breakdown.sql)
+  /// จะ fallback ไปใช้ `get_room_members` + ค่าเช่าของตัวเองเท่านั้น
+  Future<List<Map<String, dynamic>>> loadRoomRentBreakdown() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return [];
+
+    // ── 1) RPC: ได้ค่าเช่าจริงของทุกคนในห้อง ──
+    try {
+      final rows = await _supabase.rpc('get_room_rent_breakdown', params: {
+        'p_user_id': uid,
+      });
+      final list = _mapBreakdownRows(rows as List, uid);
+      if (list.isNotEmpty) return list;
+    } catch (e) {
+      print('⚠️ get_room_rent_breakdown ไม่พร้อมใช้งาน: $e');
+    }
+
+    // ── 2) Fallback: รายชื่อสมาชิกจาก get_room_members + ค่าเช่าของตัวเอง ──
+    final room = await loadMyRoom();
+    final members = (room['members'] as List?) ?? [];
+    if (members.isEmpty) return [];
+
+    final myRent = await _loadMyRent();
+
+    final list = <Map<String, dynamic>>[];
+    for (final m in members) {
+      final isMe = m['isMe']?.toString() == '1';
+      list.add({
+        'name': m['name']?.toString() ?? '-',
+        'phone': m['phone']?.toString() ?? '',
+        'role': m['role']?.toString() ?? 'Roommate',
+        'rent': isMe ? myRent : null,
+        'deposit': null,
+        'isMe': isMe,
+        'isMainTenant': m['role']?.toString() == 'ผู้เช่าหลัก',
+      });
+    }
+    return list;
+  }
+
+  /// แปลงแถวจาก RPC เป็นรูปแบบที่การ์ดค่าเช่าใช้
+  List<Map<String, dynamic>> _mapBreakdownRows(List rows, String uid) {
+    final list = <Map<String, dynamic>>[];
+    for (final r in rows) {
+      final m = r as Map<String, dynamic>;
+      final memberType = m['member_type']?.toString() ?? 'tenant';
+      final isRoommate = memberType == 'roommate';
+      final rent = _toDouble(m['rent']);
+      list.add({
+        'name': m['full_name']?.toString() ?? '-',
+        'phone': m['phone']?.toString() ?? '',
+        'role': isRoommate ? 'Roommate' : 'ผู้เช่าหลัก',
+        'rent': rent,
+        'deposit': _toDouble(m['deposit']),
+        'isMe': m['user_id']?.toString() == uid,
+        'isMainTenant': !isRoommate,
+      });
+    }
+    // ผู้เช่าหลักขึ้นก่อน แล้วค่อย Roommate
+    list.sort((a, b) {
+      final aMain = a['isMainTenant'] == true ? 0 : 1;
+      final bMain = b['isMainTenant'] == true ? 0 : 1;
+      if (aMain != bMain) return aMain.compareTo(bMain);
+      return (a['name'] ?? '').compareTo(b['name'] ?? '');
+    });
+    return list;
+  }
+
+  /// ค่าเช่าของตัวเอง (อ่านได้เพราะเป็นแถวของตัวเองใน tenant_rentals / bills)
+  Future<double?> _loadMyRent() async {
+    try {
+      final uid = _supabase.auth.currentUser?.id;
+      if (uid == null) return null;
+
+      final rental = await _supabase
+          .from('tenant_rentals')
+          .select('rent')
+          .eq('member_id', uid)
+          .maybeSingle();
+      final rent = _toDouble(rental?['rent']);
+      if (rent != null && rent > 0) return rent;
+
+      final bill = await _supabase
+          .from('bills')
+          .select('rent')
+          .eq('tenant_id', uid)
+          .order('due_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return _toDouble(bill?['rent']);
+    } catch (e) {
+      print('⚠️ _loadMyRent error: $e');
+      return null;
+    }
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
 }

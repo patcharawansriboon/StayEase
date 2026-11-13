@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'widgets/app_sizes.dart';
 class RequestScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final void Function(String requestId)? onNavigateToDormitoryRequest;
@@ -19,15 +20,17 @@ class RequestScreenState extends State<RequestScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _dormRequests = [];
   String? _error;
+  RealtimeChannel? _requestChannel;
 
   @override
   void initState() {
     super.initState();
-    _loadDormRequest();
+    _loadDormRequest().then((_) => _subscribeRequestChanges());
   }
 
   @override
   void dispose() {
+    _requestChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -98,7 +101,7 @@ class RequestScreenState extends State<RequestScreen> {
       final rows = await Supabase.instance.client
           .from('dormitory_members')
           .select(
-              'id, user_id, status, member_type, created_at, dormitories(dorm_code)')
+              'id, user_id, status, member_type, created_at, dormitories!dormitory_members_dormitory_id_fkey(dorm_code)')
           .inFilter('dormitory_id', dormIds)
           .eq('status', 'pending')
           .order('created_at', ascending: false);
@@ -109,6 +112,7 @@ class RequestScreenState extends State<RequestScreen> {
           (rows as List).map((r) => r['user_id'].toString()).toList();
       Map<String, Map<String, dynamic>> tenantMap = {};
       Map<String, Map<String, dynamic>> roommateMap = {};
+      Map<String, Map<String, dynamic>> profileMap = {};
       if (userIds.isNotEmpty) {
         final tenantRows = await Supabase.instance.client
             .from('tenants')
@@ -126,6 +130,41 @@ class RequestScreenState extends State<RequestScreen> {
         roommateMap = {
           for (final r in (roommateRows as List)) r['id'].toString(): r,
         };
+
+        profileMap = <String, Map<String, dynamic>>{};
+        try {
+          final profileRows = await Supabase.instance.client
+              .from('tenants')
+              .select('id, avatar_url')
+              .inFilter('id', userIds);
+          for (final p in (profileRows as List)) {
+            if (p['id'] == null) continue;
+            profileMap[p['id'].toString()] = p;
+          }
+        } catch (e) {
+          debugPrint('fetch tenants avatar error: $e');
+        }
+
+        final missing = userIds
+            .where((uid) =>
+                !profileMap.containsKey(uid.toString()) ||
+                (profileMap[uid.toString()]?['avatar_url']?.toString() ?? '')
+                    .isEmpty)
+            .toList();
+        if (missing.isNotEmpty) {
+          try {
+            final profileRows2 = await Supabase.instance.client
+                .from('roommate_invites')
+                .select('id, avatar_url')
+                .inFilter('id', missing);
+            for (final p in (profileRows2 as List)) {
+              if (p['id'] == null) continue;
+              profileMap[p['id'].toString()] = p;
+            }
+          } catch (e) {
+            debugPrint('fetch roommate_invites avatar error: $e');
+          }
+        }
       }
 
       if (!mounted) return;
@@ -136,6 +175,7 @@ class RequestScreenState extends State<RequestScreen> {
         final memberType = r['member_type']?.toString() ?? 'tenant';
         final isRoommate = memberType == 'roommate';
         final isUpgrade  = memberType == 'upgrade';
+        final isLeave    = memberType == 'leave';
 
         // upgrade และ roommate เก็บชื่อใน roommate_invites
         // tenant ดึงจาก tenants แต่ fallback ไป roommate_invites ถ้าไม่มีข้อมูล
@@ -150,10 +190,12 @@ class RequestScreenState extends State<RequestScreen> {
           'id': r['id'],
           'userId': uid,
           'isRoommate': isRoommate,
-          'isUpgrade':  isUpgrade,
+          'isUpgrade': isUpgrade,
+          'isLeave': isLeave,
           'memberType': memberType,
           'fullName': person?['full_name'] ?? 'Unknown',
           'phone': person?['phone']?.toString() ?? '',
+          'avatarUrl': profileMap[uid]?['avatar_url']?.toString() ?? '',
           'dormCode': dorm?['dorm_code'] ?? '-',
           'date': r['created_at'] ?? '',
         });
@@ -175,6 +217,40 @@ class RequestScreenState extends State<RequestScreen> {
         _error = 'โหลดคำขอไม่สำเร็จ: $e';
       });
     }
+  }
+
+  /// ฟังการเปลี่ยนแปลงคำขอเข้า/ออกหอพักแบบ real-time
+  void _subscribeRequestChanges() {
+    final client = Supabase.instance.client;
+    _requestChannel = client.channel('realtime:dorm_requests');
+
+    final channel = _requestChannel!;
+    channel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'dormitory_members',
+      callback: (payload) async {
+        final newRecord = payload.newRecord as Map<String, dynamic>;
+        final status = newRecord['status']?.toString();
+        if (status == 'pending' && mounted) {
+          await _loadDormRequest();
+        }
+      },
+    )
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'dormitory_members',
+      callback: (payload) async {
+        final newRecord = payload.newRecord as Map<String, dynamic>;
+        final status = newRecord['status']?.toString();
+        if (status == 'pending' && mounted) {
+          await _loadDormRequest();
+        }
+      },
+    )
+        .subscribe();
   }
 
   @override
@@ -211,7 +287,7 @@ class RequestScreenState extends State<RequestScreen> {
                           _error!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 13,
                             color: Color(0xFF888888),
                           ),
@@ -225,7 +301,7 @@ class RequestScreenState extends State<RequestScreen> {
                         child: Text(
                           'ยังไม่มีคำขอเข้าหอพัก',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 13,
                             color: Color(0xFFAAAAAA),
                           ),
@@ -247,20 +323,27 @@ class RequestScreenState extends State<RequestScreen> {
   }) {
     final isRoommate = data['isRoommate'] == true;
     final isUpgrade  = data['isUpgrade']  == true;
+    final isLeave    = data['isLeave']    == true;
 
-    final Color avatarColor = isUpgrade
+    final Color avatarColor = isLeave
+        ? const Color(0xFFF16C6C)
+        : isUpgrade
         ? const Color(0xFFE6A700)
         : isRoommate
             ? const Color(0xFF7BB6E8)
             : const Color(0xFF4F8FDB);
 
-    final String title = isUpgrade
+    final String title = isLeave
+        ? 'คำขอออกจากหอพัก'
+        : isUpgrade
         ? 'คำขอเปลี่ยนเป็นผู้เช่าหลัก'
         : isRoommate
             ? 'คำขอเข้าร่วมห้อง (Roommate)'
             : 'คำขอเข้าหอพัก (ผู้เช่าหลัก)';
 
-    final String subtitle = isUpgrade
+    final String subtitle = isLeave
+        ? '${data['fullName']} ต้องการออกจากหอพัก ${data['dormCode']}'
+        : isUpgrade
         ? '${data['fullName']} ต้องการเปลี่ยนเป็นผู้เช่าหลัก หอพัก ${data['dormCode']}'
         : isRoommate
             ? '${data['fullName']} ต้องการเข้าร่วมห้อง หอพัก ${data['dormCode']}'
@@ -295,7 +378,7 @@ class RequestScreenState extends State<RequestScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF000000),
@@ -305,7 +388,7 @@ class RequestScreenState extends State<RequestScreen> {
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 12,
                       color: Color(0xFF888888),
                     ),
@@ -317,7 +400,7 @@ class RequestScreenState extends State<RequestScreen> {
             Text(
               _formatTime(data['date']),
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 12,
                 color: Color(0xFF888888),
               ),
@@ -347,16 +430,16 @@ class RequestScreenState extends State<RequestScreen> {
           GestureDetector(
             onTap: widget.onBack,
             child: const Icon(Icons.chevron_left,
-                size: 28, color: Color(0xFF000000)),
+                size: kBackIconSize, color: Color(0xFF000000)),
           ),
           const Expanded(
             child: Center(
               child: Text(
                 'การแจ้งเตือน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class TermsOfUseScreen extends StatelessWidget {
   final VoidCallback? onBack;
 
@@ -46,7 +47,7 @@ class TermsOfUseScreen extends StatelessWidget {
                                 Text(
                                   'การใช้ StayEase',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF000000),
@@ -56,7 +57,7 @@ class TermsOfUseScreen extends StatelessWidget {
                                 Text(
                                   'การใช้งานแอปหมายถึง คุณยอมรับและตกลงปฏิบัติตามข้อกำหนดการใช้งานต่อไปนี้',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 12,
                                     color: Color(0xFF555555),
                                     height: 1.5,
@@ -150,7 +151,7 @@ Container(
             child: Text(
               '$number',
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
@@ -166,7 +167,7 @@ Container(
               Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
@@ -176,7 +177,7 @@ Container(
               Text(
                 detail,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 12,
                   color: Color(0xFF555555),
                   height: 1.5,
@@ -198,7 +199,7 @@ Container(
             onTap: onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -207,8 +208,9 @@ Container(
               child: Text(
                 'ข้อกำหนดการใช้งาน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

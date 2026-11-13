@@ -84,7 +84,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     try {
       final row = await _supabase
           .from('dormitory_members')
-          .select('status, dormitories(id, dorm_code, dorm_name)')
+          .select('status, dormitories!dormitory_members_dormitory_id_fkey(id, dorm_code, dorm_name)')
           .eq('user_id', uid)
           .order('created_at', ascending: false)
           .limit(1)
@@ -156,7 +156,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
     try {
       final rows = await _supabase
           .from('repairs')
-          .select('id, room_number, title, description, created_at, status')
+          .select('id, room_number, category, description, created_at, status')
           .eq('user_id', uid)
           .order('created_at', ascending: false)
           .limit(20);
@@ -164,7 +164,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
           .map((r) => {
                 'id': r['id'],
                 'room': r['room_number'] ?? '',
-                'title': r['title'] ?? '',
+                'title': r['category'] ?? '',
                 'description': r['description'] ?? '',
                 'date': _formatDate(r['created_at']),
                 'status': r['status'] ?? '',
@@ -242,7 +242,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                 Text(
                   'สวัสดี $name',
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF000000),
@@ -251,7 +251,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
                 Text(
                   'หอพัก ${_dormInfo?['dorm_code'] ?? '-'}',
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Color(0xFF888888),
                   ),
@@ -271,7 +271,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         const Text(
           '📢 ประกาศ',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
@@ -296,7 +296,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         const Text(
           '💰 ค่าเช่าห้อง / บิล',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
@@ -314,7 +314,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
           Text(
             'ดูบิลย้อนหลัง ${_bills.length - 1} รายการ',
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 12,
               color: Color(0xFF4181CB),
             ),
@@ -332,7 +332,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         const Text(
           '🔧 แจ้งซ่อม',
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
@@ -363,17 +363,17 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: const TextStyle(
-            fontFamily: 'Prompt', fontSize: 14, fontWeight: FontWeight.w600,
+            fontFamily: 'Noto Sans Thai', fontSize: 14, fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
           )),
           const SizedBox(height: 4),
           Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontFamily: 'Prompt', fontSize: 12, color: Color(0xFF555555),
+              fontFamily: 'Noto Sans Thai', fontSize: 12, color: Color(0xFF555555),
             )),
           const SizedBox(height: 4),
           Text(date, style: const TextStyle(
-            fontFamily: 'Prompt', fontSize: 11, color: Color(0xFF999999),
+            fontFamily: 'Noto Sans Thai', fontSize: 11, color: Color(0xFF999999),
           )),
         ],
       ),
@@ -393,17 +393,17 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('📅 $month', style: const TextStyle(
-            fontFamily: 'Prompt', fontSize: 14, fontWeight: FontWeight.w600,
+            fontFamily: 'Noto Sans Thai', fontSize: 14, fontWeight: FontWeight.w600,
             color: Color(0xFF1A1A2E),
           )),
           const SizedBox(height: 6),
           Text(amount, style: const TextStyle(
-            fontFamily: 'Prompt', fontSize: 20, fontWeight: FontWeight.w700,
+            fontFamily: 'Noto Sans Thai', fontSize: 20, fontWeight: FontWeight.w700,
             color: Color(0xFF4181CB),
           )),
           const SizedBox(height: 4),
           Text(due, style: const TextStyle(
-            fontFamily: 'Prompt', fontSize: 12, color: Color(0xFF888888),
+            fontFamily: 'Noto Sans Thai', fontSize: 12, color: Color(0xFF888888),
           )),
           const SizedBox(height: 4),
           Container(
@@ -415,7 +415,7 @@ class _TenantDashboardScreenState extends State<TenantDashboardScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(status, style: TextStyle(
-              fontFamily: 'Prompt', fontSize: 11,
+              fontFamily: 'Noto Sans Thai', fontSize: 11,
               color: status == 'ชำระแล้ว'
                   ? const Color(0xFF2E7D32)
                   : const Color(0xFFCC0000),

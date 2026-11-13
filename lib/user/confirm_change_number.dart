@@ -2,23 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
+import '../widgets/keyboard_safe_scroll.dart';
+
 class ConfirmChangeNumberScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final ValueChanged<String>? onSave;
 
-  const ConfirmChangeNumberScreen({
-    super.key,
-    this.onBack,
-    this.onSave,
-  });
+  const ConfirmChangeNumberScreen({super.key, this.onBack, this.onSave});
 
   @override
   State<ConfirmChangeNumberScreen> createState() =>
       _ConfirmChangeNumberScreenState();
 }
 
-class _ConfirmChangeNumberScreenState
-    extends State<ConfirmChangeNumberScreen> {
+class _ConfirmChangeNumberScreenState extends State<ConfirmChangeNumberScreen> {
   final TextEditingController _phoneController = TextEditingController();
 
   @override
@@ -32,16 +30,14 @@ class _ConfirmChangeNumberScreenState
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
+              child: KeyboardSafeScroll(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                child: Column(
+                content: Column(
                   children: [
                     // Icon
                     SvgPicture.asset(
@@ -55,7 +51,7 @@ class _ConfirmChangeNumberScreenState
                     const Text(
                       'กรอกเบอร์มือถือใหม่',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -67,7 +63,7 @@ class _ConfirmChangeNumberScreenState
                     Text(
                       'กรุณากรอกเบอร์มือถือที่ต้องการใช้',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Colors.black.withValues(alpha: 0.35),
                       ),
@@ -80,7 +76,7 @@ class _ConfirmChangeNumberScreenState
                       child: Text(
                         'เบอร์มือถือใหม่',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFF000000),
                         ),
@@ -89,15 +85,15 @@ class _ConfirmChangeNumberScreenState
                     const SizedBox(height: 8),
 
                     // Phone input
-Container(
-                       decoration: BoxDecoration(
-                         color: Colors.white,
-                         borderRadius: BorderRadius.circular(16),
-                         border: Border.all(
-                           color: const Color(0xFFD9D9D9),
-                           width: 1,
-                         ),
-                       ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFD9D9D9),
+                          width: 1,
+                        ),
+                      ),
                       child: TextField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
@@ -106,20 +102,22 @@ Container(
                           LengthLimitingTextInputFormatter(10),
                         ],
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           color: Color(0xFF000000),
                         ),
                         decoration: const InputDecoration(
                           hintText: '099-0000000',
                           hintStyle: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFFAAAAAA),
                           ),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                         ),
                       ),
                     ),
@@ -129,7 +127,9 @@ Container(
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF4F8FDB).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
@@ -140,14 +140,16 @@ Container(
                           Icon(
                             Icons.chat_bubble_outline,
                             size: 20,
-                            color: const Color(0xFF4F8FDB).withValues(alpha: 0.6),
+                            color: const Color(
+                              0xFF4F8FDB,
+                            ).withValues(alpha: 0.6),
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
                             child: Text(
                               'เบอร์มือถือใหม่จะใช้สำหรับ\nเข้าสู่ระบบและรับการแจ้งเตือน',
                               style: TextStyle(
-                                fontFamily: 'Prompt',
+                                fontFamily: 'Noto Sans Thai',
                                 fontSize: 12,
                                 color: Color(0xFF4F8FDB),
                                 height: 1.5,
@@ -159,41 +161,41 @@ Container(
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            // บันทึก button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _phoneController,
-                  builder: (context, value, _) {
-                    final isValid = value.text.length == 10;
-                    return ElevatedButton(
-                  onPressed: isValid
-                      ? () => widget.onSave?.call(_phoneController.text)
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F8FDB),
-                    disabledBackgroundColor: const Color(0xFF4F8FDB).withValues(alpha: 0.4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                bottom: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _phoneController,
+                      builder: (context, value, _) {
+                        final isValid = value.text.length == 10;
+                        return ElevatedButton(
+                          onPressed: isValid
+                              ? () => widget.onSave?.call(_phoneController.text)
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4F8FDB),
+                            disabledBackgroundColor: const Color(
+                              0xFF4F8FDB,
+                            ).withValues(alpha: 0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'บันทึก',
+                            style: TextStyle(
+                              fontFamily: 'Noto Sans Thai',
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    elevation: 0,
                   ),
-                  child: const Text(
-                    'บันทึก',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                );
-                  },
                 ),
               ),
             ),
@@ -212,7 +214,7 @@ Container(
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -221,8 +223,9 @@ Container(
               child: Text(
                 'เปลี่ยนเบอร์มือถือ',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

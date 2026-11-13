@@ -6,6 +6,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../widgets/app_sizes.dart';
+import '../widgets/keyboard_safe_scroll.dart';
+
 class ApplicationProcessScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onSubmit;
@@ -33,7 +36,49 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
   final _roomController = TextEditingController();
   final _startDateController = TextEditingController();
 
-  final List<Map<String, dynamic>> _attachments = []; // {file: File, title: String}
+  final List<Map<String, dynamic>> _attachments = [];
+
+  /// true = ผู้ใช้ยังเป็น Roommate อยู่ (ยังไม่ได้ออกจากหอพัก)
+  /// → ต้องยกระดับภายในหอพักเดิมเท่านั้น (dorm_code ถูก lock ไว้)
+  bool _isRoommateUpgrade = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _detectRoommateAndPrefill();
+  }
+
+  /// ตรวจว่า user ยังเป็น Roommate ที่ approved อยู่หรือไม่
+  /// ถ้าใช่ → pre-fill dorm_code ของหอเดิมและล็อกฟิลด์ไว้
+  Future<void> _detectRoommateAndPrefill() async {
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid == null) return;
+
+      final row = await Supabase.instance.client
+          .from('dormitory_members')
+          .select(
+            'dormitory_id, dormitories!dormitory_members_dormitory_id_fkey(dorm_code)',
+          )
+          .eq('user_id', uid)
+          .eq('member_type', 'roommate')
+          .eq('status', 'approved')
+          .maybeSingle();
+
+      if (!mounted || row == null) return;
+
+      final dormCode =
+          (row['dormitories'] as Map<String, dynamic>?)?['dorm_code']
+              ?.toString() ??
+          '';
+      if (dormCode.isEmpty) return;
+
+      setState(() {
+        _isRoommateUpgrade = true;
+        _dormCodeController.text = dormCode;
+      });
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -42,6 +87,19 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
     _roomController.dispose();
     _startDateController.dispose();
     super.dispose();
+  }
+
+  void _showRequestError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'Noto Sans Thai'),
+        ),
+        backgroundColor: const Color(0xFFFF0303),
+      ),
+    );
   }
 
   Future<void> _onNext() async {
@@ -54,9 +112,10 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         print('🔍 _onNext: uid=$uid');
         if (uid != null) {
           // ตรวจสอบว่าเป็น roommate อยู่แล้วหรือไม่ (เพื่อกำหนด member_type)
+          // ดึง dormitory_id/room_id เดิมมาด้วย เพื่อ snapshot ไว้คืนตอนปฏิเสธ
           final existingRoommate = await Supabase.instance.client
               .from('dormitory_members')
-              .select('id, member_type, status')
+              .select('id, member_type, status, dormitory_id, room_id')
               .eq('user_id', uid)
               .eq('member_type', 'roommate')
               .eq('status', 'approved')
@@ -75,6 +134,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
 
           if (dormCode.isEmpty || roomNumber.isEmpty) {
             print('❌ dorm code or room number is empty');
+            _showRequestError('กรุณากรอกรหัสหอพักและเลขห้องให้ครบ');
             return;
           }
 
@@ -88,6 +148,9 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
 
           if (dormRow == null) {
             print('❌ dormitory not found for code: $dormCode');
+            _showRequestError(
+              'ไม่พบหอพักรหัส $dormCode กรุณาตรวจสอบรหัสหอพักอีกครั้ง',
+            );
             return;
           }
           final dormitoryId = dormRow['id'] as String;
@@ -113,21 +176,21 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                 .select('room_number, dormitory_id')
                 .eq('dormitory_id', dormitoryId);
             print('🔍 All rooms in dormitory $dormitoryId: $allRooms');
-            
+
             // Also check all rooms with this room_number across all dormitories
             final allMatching = await Supabase.instance.client
                 .from('rooms')
                 .select('room_number, dormitory_id')
                 .ilike('room_number', roomNumber);
             print('🔍 All rooms with room_number=$roomNumber: $allMatching');
-            
+
             print('❌ room not found: $roomNumber in dormitory $dormitoryId');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
                     'ไม่พบห้อง $roomNumber ในหอพักนี้ กรุณาติดต่อแอดมินสร้างห้องก่อน',
-                    style: const TextStyle(fontFamily: 'Prompt'),
+                    style: const TextStyle(fontFamily: 'Noto Sans Thai'),
                   ),
                   backgroundColor: const Color(0xFFFF0303),
                 ),
@@ -137,7 +200,9 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
           }
 
           final memberType = isUpgrade ? 'upgrade' : 'tenant';
-          print('🔍 memberType: $memberType, dormitoryId=$dormitoryId, roomId=$roomId');
+          print(
+            '🔍 memberType: $memberType, dormitoryId=$dormitoryId, roomId=$roomId',
+          );
 
           // อัปเดตชื่อ/เบอร์ให้ roommate_invites เพื่อให้ admin เห็นในรายละเอียดคำขอ
           final existingInvite = await Supabase.instance.client
@@ -148,76 +213,132 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
 
           if (existingInvite != null) {
             // มี record อยู่แล้ว (roommate เดิม) → update ชื่อ/เบอร์/สถานะ
-            await Supabase.instance.client.from('roommate_invites').update({
-              'full_name': widget.userName,
-              'phone':     widget.userPhone,
-              'status':    'pending',
-            }).eq('id', uid);
+            await Supabase.instance.client
+                .from('roommate_invites')
+                .update({
+                  'full_name': widget.userName,
+                  'phone': widget.userPhone,
+                  'status': 'pending',
+                })
+                .eq('id', uid);
           } else {
             // ไม่มี record → insert พร้อม invite_code dummy (NOT NULL constraint)
             await Supabase.instance.client.from('roommate_invites').insert({
-              'id':          uid,
-              'full_name':   widget.userName,
-              'phone':       widget.userPhone,
+              'id': uid,
+              'full_name': widget.userName,
+              'phone': widget.userPhone,
               'invite_code': 'UPGRADE-$uid',
-              'status':      'pending',
+              'status': 'pending',
               'is_verified': false,
             });
           }
           print('🔍 updated roommate_invites: ${widget.userName}');
 
-          // ตรวจ record เดิมของ user+dormitory นี้ (ทุก status)
-          // เพราะ dormitory_members มี unique(user_id, dormitory_id)
-          // ถ้ามี record เก่า (เช่น rejected) ต้อง update ไม่ใช่ insert ใหม่
-          final existing = await Supabase.instance.client
-              .from('dormitory_members')
-              .select('id, status')
-              .eq('user_id', uid)
-              .eq('dormitory_id', dormitoryId)
-              .maybeSingle();
+          if (isUpgrade) {
+            // ── กรณียกระดับ Roommate → ผู้เช่าหลัก ──
+            // ใช้ "แถว Roommate เดิมแถวเดียว" เป็นคำขอ upgrade (เพราะ
+            // unique(user_id, dormitory_id) ทำให้มี 2 แถวในหอเดียวกันไม่ได้)
+            // snapshot ค่าเดิม (dormitory/room/member_type) ไว้ก่อน เพื่อให้
+            // แอดมิน "ปฏิเสธ" แล้วคืนกลับเป็น Roommate ห้องเดิมได้
+            final roommateId = existingRoommate['id'].toString();
+            final prevDormitoryId = existingRoommate['dormitory_id']
+                ?.toString();
+            final prevRoomId = existingRoommate['room_id']?.toString();
+            final prevMemberType =
+                existingRoommate['member_type']?.toString() ?? 'roommate';
 
-          print('🔍 existing record: $existing');
+            // ถ้าหอเป้าหมายต่างจากหอเดิม และมีแถวค้างอยู่ในหอเป้าหมายแล้ว
+            // (เช่น rejected เก่า) ให้ลบทิ้งก่อน ไม่งั้นจะชน unique constraint
+            if (prevDormitoryId != dormitoryId) {
+              final clash = await Supabase.instance.client
+                  .from('dormitory_members')
+                  .select('id')
+                  .eq('user_id', uid)
+                  .eq('dormitory_id', dormitoryId)
+                  .maybeSingle();
+              if (clash != null) {
+                await Supabase.instance.client
+                    .from('dormitory_members')
+                    .delete()
+                    .eq('id', clash['id']);
+                print('🔍 removed clashing row in target dorm: ${clash['id']}');
+              }
+            }
 
-          if (existing == null) {
-            // ไม่มี record ในหอนี้ → insert ใหม่
-            final insertData = {
-              'user_id': uid,
-              'dormitory_id': dormitoryId,
-              'status': 'pending',
-              'member_type': memberType,
-              'room_id': roomId,
-              'created_at': DateTime.now().toIso8601String(),
-            };
-            print('🔍 Inserting: $insertData');
-            await Supabase.instance.client
-                .from('dormitory_members')
-                .insert(insertData);
-            print('✅ Insert success');
-          } else if (existing['status'] != 'pending') {
-            // มี record เดิม (rejected/approved/left) → update กลับเป็น pending
             await Supabase.instance.client
                 .from('dormitory_members')
                 .update({
                   'status': 'pending',
-                  'member_type': memberType,
+                  'member_type': 'upgrade',
+                  'dormitory_id': dormitoryId,
                   'room_id': roomId,
-                  'created_at': DateTime.now().toIso8601String(),
+                  'prev_dormitory_id': prevDormitoryId,
+                  'prev_room_id': prevRoomId,
+                  'prev_member_type': prevMemberType,
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
                 })
-                .eq('id', existing['id']);
-            print('✅ Update existing record → pending');
+                .eq('id', roommateId);
+            print(
+              '✅ Upgrade request saved (snapshot prev room=$prevRoomId dorm=$prevDormitoryId)',
+            );
           } else {
-            print('⚠️ Already has pending request');
+            // ── กรณีสมัครผู้เช่าหลักปกติ (ไม่ใช่ Roommate เดิม) ──
+            // ตรวจ record เดิมของ user+dormitory นี้ (ทุก status)
+            // เพราะ dormitory_members มี unique(user_id, dormitory_id)
+            // ถ้ามี record เก่า (เช่น rejected) ต้อง update ไม่ใช่ insert ใหม่
+            final existing = await Supabase.instance.client
+                .from('dormitory_members')
+                .select('id, status')
+                .eq('user_id', uid)
+                .eq('dormitory_id', dormitoryId)
+                .maybeSingle();
+
+            print('🔍 existing record: $existing');
+
+            if (existing == null) {
+              // ไม่มี record ในหอนี้ → insert ใหม่
+              final insertData = {
+                'user_id': uid,
+                'dormitory_id': dormitoryId,
+                'status': 'pending',
+                'member_type': memberType,
+                'room_id': roomId,
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+              };
+              print('🔍 Inserting: $insertData');
+              await Supabase.instance.client
+                  .from('dormitory_members')
+                  .insert(insertData);
+              print('✅ Insert success');
+            } else if (existing['status'] != 'pending') {
+              // มี record เดิม (rejected/approved/left) → update กลับเป็น pending
+              await Supabase.instance.client
+                  .from('dormitory_members')
+                  .update({
+                    'status': 'pending',
+                    'member_type': memberType,
+                    'room_id': roomId,
+                    'created_at': DateTime.now().toUtc().toIso8601String(),
+                  })
+                  .eq('id', existing['id']);
+              print('✅ Update existing record → pending');
+            } else {
+              print('⚠️ Already has pending request');
+            }
           }
         }
       } catch (e) {
         print('❌ submit request error: $e');
+        // ส่งคำขอไม่สำเร็จ → แจ้งผู้ใช้จริง ไม่ขึ้นว่าสำเร็จ และไม่ไปหน้าถัดไป
+        _showRequestError('ส่งคำขอไม่สำเร็จ กรุณาลองใหม่อีกครั้ง ($e)');
+        return;
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
               'ส่งคำขอเรียบร้อย รอการอนุมัติจากแอดมิน',
-              style: TextStyle(fontFamily: 'Prompt'),
+              style: TextStyle(fontFamily: 'Noto Sans Thai'),
             ),
             backgroundColor: Color(0xFF4F8FDB),
             duration: Duration(seconds: 2),
@@ -241,16 +362,14 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
+              child: KeyboardSafeScroll(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                child: Column(
+                content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildStepIndicator(),
@@ -262,9 +381,9 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                     if (_currentStep == 3) _buildStep3(),
                   ],
                 ),
+                bottom: _buildBottomButtons(),
               ),
             ),
-            _buildBottomButtons(),
           ],
         ),
       ),
@@ -297,7 +416,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                 Text(
                   'ยกระดับเป็นผู้เช่าหลัก',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF000000),
@@ -307,7 +426,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                 Text(
                   'เพื่อรับสิทธิ์ในการจัดการห้องและใช้งาน\nฟังชันเพิ่มเติมของหอพัก',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Color(0xFF666666),
                     height: 1.5,
@@ -356,7 +475,12 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         _buildSectionTitle('ข้อมูลห้องพัก'),
         const SizedBox(height: 12),
         _buildLabel('รหัสหอพัก'),
-        _buildInput(_dormCodeController, hint: 'กรุณากรอกรหัสหอพัก'),
+        // Roommate ที่ยังไม่ออกจากหอพัก → ยกระดับได้แค่หอเดิมเท่านั้น
+        // ล็อก field ด้วยกล่อง read-only + icon แม่กุญแจ
+        if (_isRoommateUpgrade)
+          _buildLockedField(_dormCodeController.text)
+        else
+          _buildInput(_dormCodeController, hint: 'กรุณากรอกรหัสหอพัก'),
         const SizedBox(height: 12),
         _buildLabel('ห้องที่ต้องการ'),
         _buildInput(_roomController, hint: 'กรุณากรอกเลขห้องที่ต้องการ'),
@@ -380,6 +504,35 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
     );
   }
 
+  /// กล่อง read-only พร้อม icon แม่กุญแจ สำหรับ field ที่ lock ไว้
+  Widget _buildLockedField(String value) {
+    return Container(
+      width: double.infinity,
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : '-',
+              style: const TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                fontSize: 15,
+                color: Color(0xFF888888),
+              ),
+            ),
+          ),
+          const Icon(Icons.lock_outline, size: 18, color: Color(0xFFAAAAAA)),
+        ],
+      ),
+    );
+  }
+
   // ---- Step 3: ยืนยัน ----
   Widget _buildStep3() {
     return Column(
@@ -390,22 +543,30 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         _buildConfirmRow('ชื่อ - นามสกุล', widget.userName),
         _buildConfirmRow('เบอร์โทรศัพท์', widget.userPhone),
         _buildConfirmRow(
-            'เลขบัตรประชาชน',
-            _idCardController.text.isNotEmpty ? _idCardController.text : '-'),
-        _buildConfirmRow('รหัสหอพัก',
-            _dormCodeController.text.isNotEmpty ? _dormCodeController.text : '-'),
-        _buildConfirmRow('ห้องที่ต้องการ',
-            _roomController.text.isNotEmpty ? _roomController.text : '-'),
+          'เลขบัตรประชาชน',
+          _idCardController.text.isNotEmpty ? _idCardController.text : '-',
+        ),
         _buildConfirmRow(
-            'วันที่เริ่มอยู่',
-            _startDateController.text.isNotEmpty
-                ? _startDateController.text
-                : '-'),
+          'รหัสหอพัก',
+          _dormCodeController.text.isNotEmpty ? _dormCodeController.text : '-',
+        ),
+        _buildConfirmRow(
+          'ห้องที่ต้องการ',
+          _roomController.text.isNotEmpty ? _roomController.text : '-',
+        ),
+        _buildConfirmRow(
+          'วันที่เริ่มอยู่',
+          _startDateController.text.isNotEmpty
+              ? _startDateController.text
+              : '-',
+        ),
         if (_attachments.isNotEmpty) ...[
           const SizedBox(height: 12),
           _buildSectionTitle('เอกสารประกอบ'),
           const SizedBox(height: 12),
-          ..._attachments.map((att) => _buildConfirmDocRow(att['title'] as String)),
+          ..._attachments.map(
+            (att) => _buildConfirmDocRow(att['title'] as String),
+          ),
         ],
       ],
     );
@@ -423,14 +584,17 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         ),
         child: Row(
           children: [
-            SvgPicture.asset('assets/images/icon_document.svg',
-                width: 28, height: 28),
+            SvgPicture.asset(
+              'assets/images/icon_document.svg',
+              width: 28,
+              height: 28,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 14,
                   color: Color(0xFF000000),
                 ),
@@ -458,7 +622,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
               child: Text(
                 label,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   color: Color(0xFF888888),
                 ),
@@ -468,7 +632,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
               child: Text(
                 value,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF000000),
@@ -494,15 +658,23 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'ชื่อหัวข้อเอกสาร',
-          style: TextStyle(fontFamily: 'Prompt', fontSize: 15, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontFamily: 'Noto Sans Thai',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         content: TextField(
           controller: titleController,
           autofocus: true,
-          style: const TextStyle(fontFamily: 'Prompt', fontSize: 14),
+          style: const TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 14),
           decoration: InputDecoration(
             hintText: 'กรุณากรอกชื่อหัวข้อ',
-            hintStyle: const TextStyle(fontFamily: 'Prompt', fontSize: 14, color: Color(0xFFAAAAAA)),
+            hintStyle: const TextStyle(
+              fontFamily: 'Noto Sans Thai',
+              fontSize: 14,
+              color: Color(0xFFAAAAAA),
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
@@ -511,22 +683,39 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Color(0xFF4F8FDB)),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('ยกเลิก', style: TextStyle(fontFamily: 'Prompt', color: Color(0xFFAAAAAA))),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Color(0xFFAAAAAA),
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4F8FDB),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               elevation: 0,
             ),
-            child: const Text('เพิ่ม', style: TextStyle(fontFamily: 'Prompt', color: Colors.white)),
+            child: const Text(
+              'เพิ่ม',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
@@ -536,7 +725,9 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
       setState(() {
         _attachments.add({
           'file': File(picked.path),
-          'title': titleController.text.isNotEmpty ? titleController.text : picked.name,
+          'title': titleController.text.isNotEmpty
+              ? titleController.text
+              : picked.name,
         });
       });
     }
@@ -566,7 +757,10 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -574,13 +768,17 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                   ),
                   child: Row(
                     children: [
-                      SvgPicture.asset('assets/images/icon_document.svg', width: 28, height: 28),
+                      SvgPicture.asset(
+                        'assets/images/icon_document.svg',
+                        width: 28,
+                        height: 28,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           att['title'] as String,
                           style: const TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF000000),
                           ),
@@ -596,14 +794,17 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                               color: Color(0xFF4CAF50),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.check,
-                                size: 13, color: Colors.white),
+                            child: const Icon(
+                              Icons.check,
+                              size: 13,
+                              color: Colors.white,
+                            ),
                           ),
                           const SizedBox(width: 6),
                           const Text(
                             'อัปโหลดแล้ว',
                             style: TextStyle(
-                              fontFamily: 'Prompt',
+                              fontFamily: 'Noto Sans Thai',
                               fontSize: 12,
                               color: Color(0xFF4CAF50),
                             ),
@@ -639,7 +840,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                   const Text(
                     'อัปโหลดไฟล์',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 14,
                       color: Color(0xFF4F8FDB),
                     ),
@@ -657,7 +858,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
     return Text(
       text,
       style: const TextStyle(
-        fontFamily: 'Prompt',
+        fontFamily: 'Noto Sans Thai',
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: Color(0xFF4F8FDB),
@@ -691,7 +892,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                       child: const Text(
                         'ย้อนกลับ',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 16,
                           color: Color(0xFF4F8FDB),
                         ),
@@ -719,15 +920,13 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF4F8FDB),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
       ),
       child: Text(
         label,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 16,
           color: Colors.white,
         ),
@@ -737,8 +936,18 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
 
   // ---- Date Picker ----
   final List<String> _monthsFull = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    'มกราคม',
+    'กุมภาพันธ์',
+    'มีนาคม',
+    'เมษายน',
+    'พฤษภาคม',
+    'มิถุนายน',
+    'กรกฎาคม',
+    'สิงหาคม',
+    'กันยายน',
+    'ตุลาคม',
+    'พฤศจิกายน',
+    'ธันวาคม',
   ];
   int _selectedDay = 1;
   int _selectedMonth = 0;
@@ -783,7 +992,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
@@ -798,19 +1007,24 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedDay - 1),
+                              initialItem: _selectedDay - 1,
+                            ),
                             itemExtent: 40,
                             looping: true,
                             onSelectedItemChanged: (i) => setModalState(
-                                () => _selectedDay = (i % 31) + 1),
+                              () => _selectedDay = (i % 31) + 1,
+                            ),
                             children: List.generate(
-                                31, (i) => _pickerItem('${i + 1}')),
+                              31,
+                              (i) => _pickerItem('${i + 1}'),
+                            ),
                           ),
                         ),
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedMonth),
+                              initialItem: _selectedMonth,
+                            ),
                             itemExtent: 40,
                             looping: true,
                             onSelectedItemChanged: (i) =>
@@ -823,13 +1037,17 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedYear - 2560),
+                              initialItem: _selectedYear - 2560,
+                            ),
                             itemExtent: 40,
                             looping: true,
                             onSelectedItemChanged: (i) => setModalState(
-                                () => _selectedYear = (i % 20) + 2560),
+                              () => _selectedYear = (i % 20) + 2560,
+                            ),
                             children: List.generate(
-                                20, (i) => _pickerItem('${i + 2560}')),
+                              20,
+                              (i) => _pickerItem('${i + 2560}'),
+                            ),
                           ),
                         ),
                       ],
@@ -849,7 +1067,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
       child: Text(
         text,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 16,
           color: Color(0xFF000000),
         ),
@@ -906,10 +1124,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
                     width: stepWidth,
                     child: _buildStep(2, 'ข้อมูลห้องพัก'),
                   ),
-                  SizedBox(
-                    width: stepWidth,
-                    child: _buildStep(3, 'ยืนยัน'),
-                  ),
+                  SizedBox(width: stepWidth, child: _buildStep(3, 'ยืนยัน')),
                 ],
               ),
             ],
@@ -934,7 +1149,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
             child: Text(
               '$number',
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
@@ -947,7 +1162,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
           label,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 13,
             color: number == _currentStep
                 ? const Color(0xFF4181CB)
@@ -964,7 +1179,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
       child: Text(
         text,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 15,
           color: Color(0xFF000000),
         ),
@@ -985,7 +1200,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
       child: Text(
         value,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 15,
           color: Color(0xFF555555),
         ),
@@ -1013,21 +1228,24 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
         inputFormatters: inputFormatters,
         textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 15,
           color: Color(0xFF000000),
         ),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 15,
             color: Color(0xFFAAAAAA),
           ),
           isCollapsed: false,
           isDense: true,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
           suffixIconConstraints: const BoxConstraints(
             minWidth: 40,
             minHeight: 0,
@@ -1035,7 +1253,11 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
           suffixIcon: suffixIcon != null
               ? Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: Icon(suffixIcon, size: 18, color: const Color(0xFFAAAAAA)),
+                  child: Icon(
+                    suffixIcon,
+                    size: 18,
+                    color: const Color(0xFFAAAAAA),
+                  ),
                 )
               : null,
         ),
@@ -1052,7 +1274,7 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
             onTap: () => widget.onBack?.call(),
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -1061,8 +1283,9 @@ class _ApplicationProcessScreenState extends State<ApplicationProcessScreen> {
               child: Text(
                 'สมัครเป็นผู้เช่าหลัก',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

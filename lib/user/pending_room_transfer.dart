@@ -3,16 +3,26 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
+import '../widgets/sign_up_background.dart';
+
+/// ประเภทคำขอที่กำลังรออนุมัติ
+/// - [upgrade] = Roommate ยกระดับเป็นผู้เช่าหลัก (คำขอย้ายห้อง)
+/// - [roommateJoin] = เข้าร่วมห้องด้วยรหัสเชิญ (คำขอเป็น Roommate)
+/// - [leave] = ผู้เช่าหลักขอออกจากหอพัก
+enum PendingRequestType { upgrade, roommateJoin, leave }
+
 class PendingRoomTransferScreen extends StatefulWidget {
   final VoidCallback? onApproved;
   final VoidCallback? onRejected;
   final VoidCallback? onBack;
+  final PendingRequestType requestType;
 
   const PendingRoomTransferScreen({
     super.key,
     this.onApproved,
     this.onRejected,
     this.onBack,
+    this.requestType = PendingRequestType.upgrade,
   });
 
   @override
@@ -20,8 +30,7 @@ class PendingRoomTransferScreen extends StatefulWidget {
       _PendingRoomTransferScreenState();
 }
 
-class _PendingRoomTransferScreenState
-    extends State<PendingRoomTransferScreen> {
+class _PendingRoomTransferScreenState extends State<PendingRoomTransferScreen> {
   static const _pollInterval = Duration(seconds: 5);
   Timer? _timer;
   String _status = 'pending'; // pending | approved | rejected
@@ -43,26 +52,131 @@ class _PendingRoomTransferScreenState
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      // poll record ล่าสุดของ user (ไม่ filter member_type เพราะ
-      // คนที่ออกจากห้องแล้วสมัครใหม่จะเป็น tenant ไม่ใช่ upgrade)
+      // poll record ล่าสุดของ user (ดึง member_type มาด้วยเพื่อแยกผลลัพธ์
+      // ของคำขอ upgrade — ดูหมายเหตุด้านล่าง)
       final row = await Supabase.instance.client
           .from('dormitory_members')
-          .select('status')
+          .select('status, member_type')
           .eq('user_id', uid)
           .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
 
-      final status = row?['status']?.toString() ?? 'pending';
+      final rawStatus = row?['status']?.toString() ?? 'pending';
+      final memberType = row?['member_type']?.toString() ?? '';
+
+      // แปลงเป็นผลลัพธ์ที่หน้าจอใช้ (pending | approved | rejected)
+      //
+      // กรณี upgrade เมื่อแอดมิน "ปฏิเสธ" โค้ดฝั่งแอดมินจะคืนแถวกลับเป็น
+      // Roommate ห้องเดิม → status='approved' + member_type='roommate'
+      // (ไม่ใช่ 'rejected' เพราะผู้ใช้ยังเป็นสมาชิกห้องเดิมอยู่จริง)
+      // จึงต้องถือว่าเป็น "ปฏิเสธ" สำหรับหน้าจอนี้ ส่วนอนุมัติจะเป็น
+      // status='approved' + member_type='tenant'
+      String resolved;
+      if (rawStatus == 'left') {
+        // ถูกนำออกจากห้อง/หอพักแล้ว
+        // - คำขอออกจากหอพัก → อนุมัติสำเร็จ
+        // - คำขออื่น (เช่น เข้าร่วมห้อง) → ถูกนำออกจากห้อง = ไม่ได้รับอนุมัติ
+        resolved = (widget.requestType == PendingRequestType.leave)
+            ? 'approved'
+            : 'rejected';
+      } else if (widget.requestType == PendingRequestType.leave) {
+        // คำขอออกจากหอพัก
+        // - member_type = 'tenant' → คืนสถานะเดิม (ถูกปฏิเสธ) = ยังเป็นผู้เช่าหลัก
+        if (rawStatus == 'pending') {
+          resolved = 'pending';
+        } else {
+          resolved = 'rejected';
+        }
+      } else if (rawStatus == 'rejected') {
+        resolved = 'rejected';
+      } else if (rawStatus == 'approved') {
+        if (widget.requestType == PendingRequestType.roommateJoin) {
+          // คำขอเข้าร่วมห้อง: อนุมัติแล้วยังเป็น Roommate (member_type = roommate)
+          resolved = (memberType == 'roommate') ? 'approved' : 'rejected';
+        } else {
+          // คำขอ upgrade: อนุมัติแล้วต้องเป็นผู้เช่าหลัก (member_type = tenant)
+          resolved = (memberType == 'tenant') ? 'approved' : 'rejected';
+        }
+      } else {
+        resolved = 'pending';
+      }
+
       if (!mounted) return;
-      if (status != _status) {
-        setState(() => _status = status);
-        // เมื่อ approved → หยุด poll แล้วแสดงหน้า success (ไม่ redirect ทันที)
-        if (status == 'approved' || status == 'rejected') {
+      if (resolved != _status) {
+        setState(() => _status = resolved);
+        // ถึงสถานะสุดท้ายแล้ว → หยุด poll (ไม่ redirect ทันที)
+        if (resolved == 'approved' || resolved == 'rejected') {
           _timer?.cancel();
         }
       }
     } catch (_) {}
+  }
+
+  // ── ข้อความตามประเภทคำขอ ──
+  String get _pendingTitle {
+    switch (widget.requestType) {
+      case PendingRequestType.roommateJoin:
+        return 'ส่งคำขอเข้าร่วมห้องเรียบร้อย';
+      case PendingRequestType.leave:
+        return 'ส่งคำขอออกจากหอพักเรียบร้อย';
+      case PendingRequestType.upgrade:
+        return 'ส่งคำขอย้ายห้องเรียบร้อย';
+    }
+  }
+
+  String get _pendingSubtitle {
+    switch (widget.requestType) {
+      case PendingRequestType.roommateJoin:
+        return 'กรุณารอให้แอดมินตรวจสอบและอนุมัติ\nคุณจะเข้าร่วมห้องได้เมื่อแอดมินอนุมัติ';
+      case PendingRequestType.leave:
+        return 'กรุณารอให้แอดมินตรวจสอบและอนุมัติ\nคุณจะออกจากหอพักเมื่อแอดมินอนุมัติ';
+      case PendingRequestType.upgrade:
+        return 'หลังจากกรอกข้อมูลเพื่อส่งคำขอ\nกรุณารอแอดมินตรวจสอบและอนุมัติ';
+    }
+  }
+
+  String get _approvedTitle {
+    switch (widget.requestType) {
+      case PendingRequestType.roommateJoin:
+        return 'อนุมัติคำขอเข้าร่วมห้องเรียบร้อย';
+      case PendingRequestType.leave:
+        return 'อนุมัติคำขอออกจากหอพักเรียบร้อย';
+      case PendingRequestType.upgrade:
+        return 'อนุมัติคำขอย้ายห้องเรียบร้อย';
+    }
+  }
+
+  String get _approvedSubtitle {
+    switch (widget.requestType) {
+      case PendingRequestType.roommateJoin:
+        return 'คุณสามารถเข้าร่วมห้องพักได้แล้ว\nในฐานะ Roommate ของห้องนั้น';
+      case PendingRequestType.leave:
+        return 'คุณออกจากหอพักเรียบร้อยแล้ว\nRoommate ในห้องของคุณถูกนำออกจากห้องด้วย';
+      case PendingRequestType.upgrade:
+        return 'คุณสามารถเข้าใช้งานแอป\nโดยการเป็นผู้เช่าหลักได้แล้ว';
+    }
+  }
+
+  String get _rejectedTitle {
+    switch (widget.requestType) {
+      case PendingRequestType.roommateJoin:
+        return 'ปฏิเสธคำขอเข้าร่วมห้อง';
+      case PendingRequestType.leave:
+        return 'ปฏิเสธคำขอออกจากหอพัก';
+      case PendingRequestType.upgrade:
+        return 'ปฏิเสธคำขอย้ายห้อง';
+    }
+  }
+
+  String get _backButtonLabel {
+    switch (widget.requestType) {
+      case PendingRequestType.roommateJoin:
+      case PendingRequestType.leave:
+        return 'กลับหน้าหลัก';
+      case PendingRequestType.upgrade:
+        return 'กลับหน้าตั้งค่า';
+    }
   }
 
   @override
@@ -78,56 +192,67 @@ class _PendingRoomTransferScreenState
     // ยังรออยู่ → แสดงหน้ารออนุมัติ
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Illustration
-              SvgPicture.asset(
-                'assets/images/pending.svg',
-                width: 220,
-                height: 220,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(height: 32),
-
-              // Title
-              const Text(
-                'ส่งคำขอย้ายห้องเรียบร้อย',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A2E),
+      body: _withBackground(
+        SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Illustration
+                SvgPicture.asset(
+                  'assets/images/pending.svg',
+                  width: 220,
+                  height: 220,
+                  fit: BoxFit.contain,
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 32),
 
-              // Subtitle
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  'หลังจากกรอกข้อมูลเพื่อส่งคำขอ\nกรุณารอแอดมินตรวจสอบและอนุมัติ',
+                // Title
+                Text(
+                  _pendingTitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Prompt',
-                    fontSize: 14,
-                    color: Color(0xFF888888),
-                    height: 1.6,
+                  style: const TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A2E),
                   ),
                 ),
-              ),
-              const SizedBox(height: 40),
+                const SizedBox(height: 12),
 
-              // Status indicator
-              _buildStatusRow(),
-            ],
+                // Subtitle
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Text(
+                    _pendingSubtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: 'Noto Sans Thai',
+                      fontSize: 14,
+                      color: Color(0xFF888888),
+                      height: 1.6,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // Status indicator
+                _buildStatusRow(),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// พื้นหลังเดียวกับหน้า already_approved: ขาวล้วน + วงกลมขอบคลื่น 2 วง
+  Widget _withBackground(Widget child) {
+    return SignUpBackground(
+      minimal: true,
+      solidColor: Colors.white,
+      child: child,
     );
   }
 
@@ -135,84 +260,80 @@ class _PendingRoomTransferScreenState
   Widget _buildApprovedView() {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Success illustration
-                    SvgPicture.asset(
-                      'assets/images/smile.svg',
-                      width: 240,
-                      height: 240,
-                      fit: BoxFit.contain,
-                      placeholderBuilder: (_) => const SizedBox(
+      body: _withBackground(
+        SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Success illustration
+                      Image.asset(
+                        'assets/images/pass.png',
                         width: 240,
                         height: 240,
-                        child: Icon(Icons.celebration,
-                            size: 80, color: Color(0xFF4F8FDB)),
+                        fit: BoxFit.contain,
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    const Text(
-                      'อนุมัติคำขอย้ายห้องเรียบร้อย',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1A2E),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 40),
-                      child: Text(
-                        'คุณสามารถเข้าใช้งานแอป\nโดยการเป็นผู้เช่าหลักได้แล้ว',
+                      const SizedBox(height: 32),
+                      Text(
+                        _approvedTitle,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 14,
-                          color: Color(0xFF888888),
-                          height: 1.6,
+                        style: const TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A1A2E),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // ปุ่มเริ่มใช้งาน
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: widget.onApproved,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F8FDB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'เริ่มใช้งาน',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          _approvedSubtitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'Noto Sans Thai',
+                            fontSize: 14,
+                            color: Color(0xFF888888),
+                            height: 1.6,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+              // ปุ่มเริ่มใช้งาน
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: widget.onApproved,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F8FDB),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'เริ่มใช้งาน',
+                      style: TextStyle(
+                        fontFamily: 'Noto Sans Thai',
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -222,85 +343,80 @@ class _PendingRoomTransferScreenState
   Widget _buildRejectedView() {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Rejected illustration
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFCE9E9),
-                        shape: BoxShape.circle,
+      body: _withBackground(
+        SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Rejected illustration
+                      SvgPicture.asset(
+                        'assets/images/reject.svg',
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.contain,
                       ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 64,
-                        color: Color(0xFFE05C5C),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    const Text(
-                      'ปฏิเสธคำขอย้ายห้อง',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Prompt',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1A2E),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 40),
-                      child: Text(
-                        'แอดมินไม่อนุมัติคำขอของคุณ\nสามารถยื่นคำขอใหม่ได้อีกครั้ง',
+                      const SizedBox(height: 32),
+                      Text(
+                        _rejectedTitle,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 14,
-                          color: Color(0xFF888888),
-                          height: 1.6,
+                        style: const TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A1A2E),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // ปุ่มกลับหน้าตั้งค่า
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: widget.onRejected,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE05C5C),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'กลับหน้าตั้งค่า',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
+                      const SizedBox(height: 12),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          'แอดมินไม่อนุมัติคำขอของคุณ\nสามารถยื่นคำขอใหม่ได้อีกครั้ง',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Noto Sans Thai',
+                            fontSize: 14,
+                            color: Color(0xFF888888),
+                            height: 1.6,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+              // ปุ่มกลับหน้าตั้งค่า
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: widget.onRejected,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF0303),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      _backButtonLabel,
+                      style: const TextStyle(
+                        fontFamily: 'Noto Sans Thai',
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -334,16 +450,13 @@ class _PendingRoomTransferScreenState
           Container(
             width: 16,
             height: 16,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
         const SizedBox(width: 8),
         Text(
           label,
           style: TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 15,
             color: dotColor,
             fontWeight: FontWeight.w500,
@@ -391,10 +504,7 @@ class _PulsingDotState extends State<_PulsingDot>
       child: Container(
         width: 16,
         height: 16,
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

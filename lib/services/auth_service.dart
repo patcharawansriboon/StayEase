@@ -42,22 +42,146 @@ class AuthService {
         password: password,
         data: {'full_name': fullName, 'phone': phone},
       );
-      return _resolveUserId(
-        phone: phone,
-        password: password,
-        label: label,
-      );
+      return _resolveUserId(phone: phone, password: password, label: label);
     } on AuthApiException catch (e) {
       final alreadyExists =
           e.code == 'user_already_exists' ||
           e.message.toLowerCase().contains('already registered');
       if (!alreadyExists) rethrow;
-      print('⚠️ $label: เบอร์นี้มีบัญชีอยู่แล้ว → เข้าสู่ระบบแทนการลงทะเบียนใหม่');
-      return _resolveUserId(
-        phone: phone,
-        password: password,
-        label: label,
+      print(
+        '⚠️ $label: เบอร์นี้มีบัญชีอยู่แล้ว → เข้าสู่ระบบแทนการลงทะเบียนใหม่',
       );
+      return _resolveUserId(phone: phone, password: password, label: label);
+    }
+  }
+
+  /// ห้องเต็มหรือยัง — นับสมาชิกที่ approved แล้วในห้อง เทียบกับ max_tenants
+  /// [selfUid] = user ปัจจุบัน (ถ้าเขามีแถวอยู่แล้วในห้องนี้ จะไม่นับซ้ำ
+  ///  เช่น re-apply หลังถูกปฏิเสธ)
+  Future<bool> _isRoomFull(String roomId, String selfUid) async {
+    try {
+      final room = await _supabase
+          .from('rooms')
+          .select('max_tenants')
+          .eq('id', roomId)
+          .maybeSingle();
+      if (room == null) return false;
+      final max = (room['max_tenants'] as num?)?.toInt() ?? 1;
+
+      final rows = await _supabase
+          .from('dormitory_members')
+          .select('user_id')
+          .eq('room_id', roomId)
+          .eq('status', 'approved');
+
+      var count = (rows as List).length;
+      // ไม่นับตัวเองถ้ามีแถว approved อยู่แล้ว
+      final alreadyIn = (rows).any((r) => r['user_id']?.toString() == selfUid);
+      if (alreadyIn) count -= 1;
+
+      return count >= max;
+    } catch (e) {
+      print('❌ _isRoomFull error: $e');
+      return false; // เช็คไม่ได้ → ไม่บล็อก (ให้แอดมินเป็น gate สุดท้าย)
+    }
+  }
+
+  /// ส่งคำขอเข้าหอพักหลังจากยืนยันในหน้า add_profile
+  Future<bool> submitMembershipAfterVerify({
+    required String phone,
+    required String fullName,
+    String? dormCode,
+    String? roomNumber,
+    String? inviteCode,
+    String? avatarUrl,
+  }) async {
+    const label = 'submitMembershipAfterVerify';
+    try {
+      final uid = _supabase.auth.currentUser?.id;
+      if (uid == null) return false;
+
+      if (inviteCode != null && inviteCode.trim().isNotEmpty) {
+        final code = inviteCode.trim().toUpperCase();
+        final invite = await _supabase
+            .from('invitation_codes')
+            .select('code, dormitory_id, room_id, expires_at, created_by')
+            .eq('code', code)
+            .maybeSingle();
+        if (invite == null) return false;
+        final expiresAt = DateTime.tryParse(invite['expires_at']?.toString() ?? '');
+        if (expiresAt != null && expiresAt.isBefore(DateTime.now())) return false;
+        final dormitoryId = invite['dormitory_id']?.toString();
+        if (dormitoryId == null) return false;
+        final inviterUid = invite['created_by']?.toString();
+        if (inviterUid != null && inviterUid == uid) return false;
+        final roomIdInvite = invite['room_id']?.toString();
+        if (roomIdInvite != null && roomIdInvite.isNotEmpty) {
+          final full = await _isRoomFull(roomIdInvite, uid);
+          if (full) return false;
+        }
+
+        await _supabase.from('roommate_invites').upsert({
+          'id': uid,
+          'full_name': fullName,
+          'phone': phone,
+          'invite_code': code,
+          'is_verified': true,
+          'status': 'pending',
+          if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatar_url': avatarUrl,
+        });
+
+        await _submitMembership(
+          uid: uid,
+          dormitoryId: dormitoryId,
+          memberType: 'roommate',
+          roomId: roomIdInvite,
+        );
+        return true;
+      }
+
+      if (dormCode != null && dormCode.trim().isNotEmpty) {
+        final code = dormCode.trim().toUpperCase();
+        final dorm = await _supabase
+            .from('dormitories')
+            .select('id')
+            .eq('dorm_code', code)
+            .maybeSingle();
+        if (dorm == null) return false;
+
+        String? roomId;
+        final room = (roomNumber ?? '').trim().toUpperCase();
+        if (room.isNotEmpty) {
+          final resolved = await _supabase.rpc(
+            'resolve_room_id',
+            params: {
+              'p_dormitory_id': dorm['id'].toString(),
+              'p_room_number': room,
+            },
+          );
+          final rows = resolved is List ? resolved : <dynamic>[];
+          roomId = rows.isNotEmpty ? rows.first['room_id']?.toString() : null;
+        }
+
+        await _supabase.from('tenants').upsert({
+          'id': uid,
+          'full_name': fullName,
+          'phone': phone,
+          'dorm_code': code,
+          'status': 'pending',
+          if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatar_url': avatarUrl,
+        });
+
+        await _submitMembership(
+          uid: uid,
+          dormitoryId: dorm['id'].toString(),
+          roomId: roomId,
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ $label Error: $e');
+      return false;
     }
   }
 
@@ -65,7 +189,6 @@ class AuthService {
   /// - memberType: 'tenant' (ผู้เช่าหลัก) หรือ 'roommate'
   /// - มีแถวอยู่แล้วและถูกปฏิเสธ → รีเซ็ตเป็น pending
   /// - มีแถวอยู่แล้วและ pending/approved → ไม่ต้องทำอะไร
-  /// หมายเหตุ: ตาราง dormitory_members ไม่มีคอลัมน์ role/room_id
   Future<void> _submitMembership({
     required String uid,
     required String dormitoryId,
@@ -95,7 +218,7 @@ class AuthService {
       'status': 'pending',
       'member_type': memberType,
       'room_id': roomId,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -103,6 +226,7 @@ class AuthService {
     required String phone,
     required String password,
     required String fullName,
+    String? avatarUrl,
   }) async {
     const label = 'signUpAdmin';
     try {
@@ -121,6 +245,7 @@ class AuthService {
         'id': uid,
         'full_name': fullName,
         'phone': phone,
+        if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatar_url': avatarUrl,
       });
       print('✅ Admin created: $uid');
       return true;
@@ -159,14 +284,16 @@ class AuthService {
       // anon อ่านตาราง rooms ไม่ได้ (RLS) จึงใช้ security definer function
       String? roomId;
       if (room.isNotEmpty) {
-        final resolved = await _supabase.rpc('resolve_room_id', params: {
-          'p_dormitory_id': dorm['id'].toString(),
-          'p_room_number': room,
-        });
+        final resolved = await _supabase.rpc(
+          'resolve_room_id',
+          params: {
+            'p_dormitory_id': dorm['id'].toString(),
+            'p_room_number': room,
+          },
+        );
 
         final rows = resolved is List ? resolved : <dynamic>[];
-        roomId =
-            rows.isNotEmpty ? rows.first['room_id']?.toString() : null;
+        roomId = rows.isNotEmpty ? rows.first['room_id']?.toString() : null;
 
         if (roomId == null || roomId.isEmpty) {
           print('❌ $label: ไม่พบห้องหมายเลข $room ในหอพัก $code');
@@ -192,15 +319,10 @@ class AuthService {
         'phone': phone,
         'dorm_code': code,
         'status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
-      await _submitMembership(
-        uid: uid,
-        dormitoryId: dorm['id'].toString(),
-        roomId: roomId,
-      );
-
+      // ไม่สร้าง dormitory_members ที่นี่ ให้สร้างใน add_profile.dart
       print('✅ Tenant created: $uid');
       return true;
     } on AuthApiException catch (e) {
@@ -246,11 +368,14 @@ class AuthService {
       if (invite == null) {
         print('❌ $label: ไม่พบรหัสเชิญ $code');
         onError?.call(
-            'ไม่พบรหัสคำเชิญ $code\nกรุณาตรวจสอบว่าถูกต้องและยังไม่หมดอายุ');
+          'ไม่พบรหัสคำเชิญ $code\nกรุณาตรวจสอบว่าถูกต้องและยังไม่หมดอายุ',
+        );
         return false;
       }
 
-      final expiresAt = DateTime.tryParse(invite['expires_at']?.toString() ?? '');
+      final expiresAt = DateTime.tryParse(
+        invite['expires_at']?.toString() ?? '',
+      );
       if (expiresAt != null && expiresAt.isBefore(DateTime.now())) {
         print('❌ $label: รหัสเชิญ $code หมดอายุแล้ว');
         onError?.call('รหัสคำเชิญหมดอายุแล้ว\nกรุณาขอรหัสใหม่จากผู้เช่าหลัก');
@@ -284,6 +409,18 @@ class AuthService {
         return false;
       }
 
+      // ตรวจว่าห้องเต็มหรือยัง (เทียบจำนวนสมาชิก approved กับ max_tenants)
+      // รหัสเชิญ 1 รหัสใช้ได้หลายคน แต่เข้าได้ไม่เกิน max ของห้อง
+      final roomId = invite['room_id']?.toString();
+      if (roomId != null && roomId.isNotEmpty) {
+        final full = await _isRoomFull(roomId, uid);
+        if (full) {
+          print('❌ $label: ห้อง $roomId เต็มแล้ว');
+          onError?.call('ห้องนี้เต็มแล้ว ไม่สามารถเข้าร่วมได้');
+          return false;
+        }
+      }
+
       await _supabase.from('roommate_invites').upsert({
         'id': uid,
         'full_name': fullName,
@@ -293,16 +430,8 @@ class AuthService {
         'status': 'pending',
       });
 
-      // ผูก Roommate เข้าหอพักเดียวกับผู้เช่าหลักที่ออกรหัส
-      // room_id มาจากรหัสเชิญ → Roommate ได้ห้องเดียวกับผู้ออกรหัส
-      await _submitMembership(
-        uid: uid,
-        dormitoryId: dormitoryId,
-        memberType: 'roommate',
-        roomId: invite['room_id']?.toString(),
-      );
-
-      print('✅ Roommate created: $uid (dormitory $dormitoryId)');
+      // ไม่สร้าง dormitory_members ที่นี่ ให้สร้างใน add_profile.dart
+      print('✅ Roommate created: $uid');
       return true;
     } on AuthApiException catch (e) {
       if (e.code == 'user_already_exists' ||
@@ -322,10 +451,26 @@ class AuthService {
     required String password,
   }) async {
     try {
-      await _supabase.auth.signInWithPassword(
-        email: _authEmail(phone),
-        password: password,
-      );
+      try {
+        await _supabase.auth.signInWithPassword(
+          email: _authEmail(phone),
+          password: password,
+        );
+      } catch (e) {
+        // ถ้าเข้าสู่ระบบไม่ได้ ลองสมัคร (กรณีมีข้อมูลในตารางแต่ยังไม่มี auth user)
+        try {
+          await _supabase.auth.signUp(
+            email: _authEmail(phone),
+            password: password,
+          );
+          await _supabase.auth.signInWithPassword(
+            email: _authEmail(phone),
+            password: password,
+          );
+        } catch (_) {
+          rethrow;
+        }
+      }
       final uid = _supabase.auth.currentUser!.id;
 
       final admin = await _supabase
@@ -400,6 +545,81 @@ class AuthService {
     } catch (e) {
       print('❌ getUserData Error: $e');
       return null;
+    }
+  }
+
+  /// เปลี่ยนรหัสผ่าน (ผู้ใช้ login อยู่ รู้รหัสเดิม)
+  /// [oldPassword] ใช้ยืนยันรหัสเดิมก่อนเปลี่ยน
+  /// คืน true เมื่อสำเร็จ
+  Future<String?> changePassword({
+    required String phone,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      // ใช้ email ของ session ปัจจุบันก่อน (แม่นยำกว่าการสร้างจากเบอร์
+      // เพราะ _userPhoneNumber อาจเป็นค่า default หรือรูปแบบไม่ตรงตอนสมัคร)
+      final sessionEmail = _supabase.auth.currentUser?.email;
+      final email = (sessionEmail != null && sessionEmail.isNotEmpty)
+          ? sessionEmail
+          : _authEmail(phone);
+
+      // ยืนยันรหัสเดิมก่อน (sign in ซ้ำด้วยรหัสเดิม)
+      try {
+        await _supabase.auth.signInWithPassword(
+          email: email,
+          password: oldPassword,
+        );
+      } on AuthApiException catch (e) {
+        print('❌ changePassword verify old password: ${e.message}');
+        return 'รหัสผ่านเดิมไม่ถูกต้อง';
+      }
+
+      // ตั้งรหัสใหม่
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      return null; // สำเร็จ
+    } on AuthApiException catch (e) {
+      print('❌ changePassword updateUser: ${e.message}');
+      // เช่น "New password should be different from the old password."
+      if (e.message.toLowerCase().contains('different')) {
+        return 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม';
+      }
+      return e.message;
+    } catch (e) {
+      print('❌ changePassword error: $e');
+      return 'เปลี่ยนรหัสผ่านไม่สำเร็จ: $e';
+    }
+  }
+
+  /// ลืมรหัสผ่าน (ไม่ได้ login) — ยืนยันด้วย เบอร์ + ชื่อ-นามสกุล
+  /// เรียก Edge Function 'reset-password' ที่ใช้ service_role ตั้งรหัสใหม่
+  /// คืน {success, error}
+  Future<Map<String, dynamic>> resetPasswordByIdentity({
+    required String phone,
+    required String fullName,
+    required String newPassword,
+  }) async {
+    try {
+      final res = await _supabase.functions.invoke(
+        'reset-password',
+        body: {
+          'phone': phone.trim(),
+          'fullName': fullName.trim(),
+          'newPassword': newPassword,
+        },
+      );
+      final data = res.data;
+      if (data is Map && data['success'] == true) {
+        return {'success': true};
+      }
+      final err = (data is Map ? data['error'] : null)?.toString() ??
+          'รีเซ็ตรหัสผ่านไม่สำเร็จ';
+      return {'success': false, 'error': err};
+    } catch (e) {
+      print('❌ resetPasswordByIdentity error: $e');
+      return {'success': false, 'error': 'เชื่อมต่อระบบไม่สำเร็จ'};
     }
   }
 

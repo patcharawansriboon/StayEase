@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
+import '../widgets/keyboard_safe_scroll.dart';
+
 class ChangeNumberScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onCancel;
@@ -37,16 +40,14 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
+              child: KeyboardSafeScroll(
                 padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                child: Column(
+                content: Column(
                   children: [
                     // Phone verify icon
                     SvgPicture.asset(
@@ -60,7 +61,7 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
                     const Text(
                       'ยืนยันตัวตน',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -73,7 +74,7 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
                       'เพื่อความปลอดภัยของบัญชี\nกรุณายืนยันตัวตนก่อนเปลี่ยนเบอร์มือถือ',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Colors.black.withValues(alpha: 0.45),
                         height: 1.5,
@@ -87,7 +88,7 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
                       child: Text(
                         'เบอร์มือถือ',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 13,
                           color: Color(0xFF000000),
                         ),
@@ -96,15 +97,15 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
                     const SizedBox(height: 8),
 
                     // Phone input
-Container(
-                       decoration: BoxDecoration(
-                         color: Colors.white,
-                         borderRadius: BorderRadius.circular(16),
-                         border: Border.all(
-                           color: const Color(0xFFD9D9D9),
-                           width: 1,
-                         ),
-                       ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFD9D9D9),
+                          width: 1,
+                        ),
+                      ),
                       child: TextField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
@@ -113,66 +114,69 @@ Container(
                           LengthLimitingTextInputFormatter(10),
                         ],
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           color: Color(0xFF000000),
                         ),
                         decoration: const InputDecoration(
                           hintText: 'กรุณากรอกเบอร์',
                           hintStyle: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 15,
                             color: Color(0xFFD9D9D9),
                           ),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            // Bottom buttons
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: Column(
-                children: [
-                  // รับรหัส OTP button
-                  ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: _phoneController,
-                    builder: (context, value, _) {
-                      final isValid = value.text.length == 10;
-                      return SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: isValid ? widget.onNavigateToOtp : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F8FDB),
-                        disabledBackgroundColor: const Color(0xFF4F8FDB).withValues(alpha: 0.4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
+                bottom: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  child: Column(
+                    children: [
+                      // รับรหัส OTP button
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _phoneController,
+                        builder: (context, value, _) {
+                          final isValid = value.text.length == 10;
+                          return SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: isValid
+                                  ? widget.onNavigateToOtp
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4F8FDB),
+                                disabledBackgroundColor: const Color(
+                                  0xFF4F8FDB,
+                                ).withValues(alpha: 0.4),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                'รับรหัส OTP',
+                                style: TextStyle(
+                                  fontFamily: 'Noto Sans Thai',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      child: const Text(
-                        'รับรหัส OTP',
-                        style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  );
-                    },
+                    ],
                   ),
-
-                ],
+                ),
               ),
             ),
           ],
@@ -193,7 +197,7 @@ Container(
             },
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -202,9 +206,9 @@ Container(
               child: Text(
                 'เปลี่ยนเบอร์มือถือ',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

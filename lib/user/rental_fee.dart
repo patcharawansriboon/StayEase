@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class RentalFeeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHome;
   final VoidCallback? onNavigateToRentalFee;
@@ -12,6 +13,9 @@ class RentalFeeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final Map<String, dynamic> currentBill;
   final bool hasRoom;
+
+  final List<Map<String, dynamic>> rentBreakdown;
+  final bool showChatBadge;
 
   const RentalFeeScreen({
     super.key,
@@ -25,6 +29,8 @@ class RentalFeeScreen extends StatefulWidget {
     this.onNavigateToProfile,
     this.currentBill = const {},
     this.hasRoom = true,
+    this.rentBreakdown = const [],
+    this.showChatBadge = false,
   });
 
   @override
@@ -34,10 +40,6 @@ class RentalFeeScreen extends StatefulWidget {
 class _RentalFeeScreenState extends State<RentalFeeScreen> {
   int _selectedIndex = 1;
   bool _showDropdown = false;
-
-  void _toggleDropdown() {
-    setState(() => _showDropdown = !_showDropdown);
-  }
 
   void _closeDropdown() {
     setState(() => _showDropdown = false);
@@ -63,10 +65,15 @@ return Scaffold(
               child: widget.hasRoom
                   ? SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Column(
-                        children: [
-                          _buildRentCard(),
-                          const SizedBox(height: 24),
+                       child: Column(
+                         children: [
+                           if (!_hasRealBill)
+                             _buildNoBillEmptyState()
+                           else if ((widget.currentBill['status']?.toString() ?? '') == 'paid')
+                             _buildNoBillEmptyState()
+                           else
+                             _buildRentCard(),
+                           const SizedBox(height: 24),
                         ],
                       ),
                     )
@@ -93,52 +100,115 @@ return Scaffold(
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 60, 16, 12),
-      child: Stack(
-        alignment: Alignment.center,
+      child: Column(
         children: [
           const Center(
             child: Text(
               'บิลของฉัน',
               style: TextStyle(
-                fontFamily: 'Prompt',
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
+                fontFamily: 'Noto Sans Thai',
+                fontSize: kPageTitleFontSize,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF000000),
               ),
             ),
           ),
-          Positioned(
-            right: 0,
-            child: GestureDetector(
-              onTap: _toggleDropdown,
-              child: Container(
-                width: 29,
-                height: 29,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(13.5),
-                  border: Border.all(color: Colors.white, width: 1),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildDot(),
-                      const SizedBox(width: 3),
-                      _buildDot(),
-                      const SizedBox(width: 3),
-                      _buildDot(),
-                    ],
-                  ),
-                ),
+          const SizedBox(height: 12),
+          _buildMenuChips(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuChips() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildChip('บิลของฉัน', true, () => widget.onNavigateToRentalFee?.call()),
+          const SizedBox(width: 8),
+          _buildChip('ประวัติ', false, () => widget.onNavigateToPaymentHistory?.call()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF4181CB) : Colors.white,
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(
+            color: selected ? const Color(0xFF4181CB) : const Color(0xFFDDE5EE),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Noto Sans Thai',
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? Colors.white : const Color(0xFF667085),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _hasRealBill {
+    final id = widget.currentBill['id']?.toString();
+    return id != null && id.isNotEmpty;
+  }
+
+  Widget _buildNoBillEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 60),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEAF2FB),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: SvgPicture.asset(
+                'assets/images/invoice.svg',
+                width: 52,
+                height: 52,
               ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'ยังไม่มีบิลค่าเช่าใหม่',
+            style: TextStyle(
+              fontFamily: 'Noto Sans Thai',
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A2E),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'รอแอดมินสร้างบิลรอบใหม่',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Noto Sans Thai',
+              fontSize: 13,
+              color: Color(0xFF9AA4B2),
             ),
           ),
         ],
       ),
     );
   }
-
   // ---- Empty state เมื่อยังไม่ได้เข้าร่วมหอพัก ----
   Widget _buildNoRoomEmptyState() {
     return Center(
@@ -154,14 +224,19 @@ return Scaffold(
                 color: Color(0xFFEAF2FB),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.receipt_long_outlined,
-                  size: 48, color: Color(0xFF4F8FDB)),
+              child: Center(
+                child: SvgPicture.asset(
+                  'assets/images/invoice.svg',
+                  width: 52,
+                  height: 52,
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
               'ยังไม่มีบิล',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1A1A2E),
@@ -172,7 +247,7 @@ return Scaffold(
               'คุณยังไม่ได้เข้าร่วมห้องพักใด\nจึงยังไม่มีบิลค่าเช่า',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 14,
                 color: Colors.black.withValues(alpha: 0.45),
                 height: 1.6,
@@ -186,212 +261,149 @@ return Scaffold(
 
   // ---- Rent Card ----
   Widget _buildRentCard() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
+    return GestureDetector(
+      onTap: widget.onNavigateToBill,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCE9F9),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFB7D6F5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Blue background
-            Container(
-              height: 140,
-              color: const Color(0xFF4F8FDB),
-            ),
-            // White bottom section
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 43,
-                color: Colors.white,
-              ),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top row: wallet + amount
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Center(
+                    child: SvgPicture.asset(
+                      'assets/images/icon_wallet.svg',
+                      width: 30,
+                      height: 30,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Center(
-                          child: SvgPicture.asset(
-                            'assets/images/icon_wallet.svg',
-                            width: 22,
-                            height: 22,
-                          ),
+                      Text(
+                        widget.currentBill['month'] ?? 'กรกฎาคม 2569',
+                        style: const TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF000000),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            widget.currentBill['month'] ?? 'กรกฎาคม 2569',
+                            widget.currentBill['total'] != null
+                                ? '${widget.currentBill['total']}'
+                                : '5,090',
                             style: const TextStyle(
-                              fontFamily: 'Prompt',
-                              fontSize: 12,
-                              color: Colors.white,
+                              fontFamily: 'Noto Sans Thai',
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF4F8FDB),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                widget.currentBill['total'] != null
-                                    ? '${widget.currentBill['total']}'
-                                    : '5,090',
-                                style: const TextStyle(
-                                  fontFamily: 'Prompt',
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFFEFFAF),
-                                ),
+                          const SizedBox(width: 8),
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 5),
+                            child: Text(
+                              'บาท',
+                              style: TextStyle(
+                                fontFamily: 'Noto Sans Thai',
+                                fontSize: 15,
+                                color: Color(0xFF8FB4E0),
                               ),
-                              const SizedBox(width: 7),
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: 2),
-                                child: Text(
-                                  'บาท',
-                                  style: TextStyle(
-                                    fontFamily: 'Prompt',
-                                    fontSize: 13,
-                                    color: Color(0xFFFEFFAF),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  // Status row
-                  Row(
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Colors.white, Color(0xFFF57B39)],
-                          ),
-                        ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFB7D6F5),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.chevron_right,
+                        size: 24,
+                        color: Color(0xFF4F8FDB),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.currentBill['status_label'] ?? 'รอชำระ',
-                        style: const TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                          width: 1,
-                          height: 16,
-                          color: const Color(0xFFD9D9D9)),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.calendar_month_outlined,
-                          size: 13, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Text(
-                        'ครบกำหนด  ${widget.currentBill['due_date'] ?? '5 สิงหาคม 2569'}',
-                        style: const TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 20),
-                  // Buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      GestureDetector(
-                        onTap: widget.onNavigateToBill,
-                        child: Container(
-                          width: 70,
-                          height: 23,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(
-                                color: const Color(0xFF4F8FDB)),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'รายละเอียด',
-                              style: TextStyle(
-                                fontFamily: 'Prompt',
-                                fontSize: 10,
-                                color: Color(0xFF4F8FDB),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 30),
-                      GestureDetector(
-                        onTap: widget.onNavigateToPayment,
-                        child: Container(
-                          width: 70,
-                          height: 23,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF4F8FDB),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'ชำระเงิน',
-                              style: TextStyle(
-                                fontFamily: 'Prompt',
-                                fontSize: 10,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFFFD54A),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  widget.currentBill['status_label'] ?? 'รอชำระ',
+                  style: const TextStyle(
+                    fontFamily: 'Noto Sans Thai',
+                    fontSize: 14,
+                    color: Color(0xFF000000),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Container(width: 1, height: 18, color: const Color(0xFFB7CDEB)),
+                const SizedBox(width: 14),
+                const Icon(Icons.calendar_month_outlined,
+                    size: 17, color: Color(0xFF4F8FDB)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'ครบกำหนด  ${widget.currentBill['due_date'] ?? '5 สิงหาคม 2569'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Noto Sans Thai',
+                      fontSize: 14,
+                      color: Color(0xFF000000),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
-
   // ---- Bottom Navigation ----
   Widget _buildBottomNav() {
     return Center(
@@ -483,16 +495,6 @@ return Scaffold(
     );
   }
 
-  Widget _buildDot() {
-    return Container(
-      width: 3,
-      height: 3,
-      decoration: const BoxDecoration(
-        color: Color(0xFF000000),
-        shape: BoxShape.circle,
-      ),
-    );
-  }
 
   List<Widget> _buildNavItems() {
         final items = <IconData?>[
@@ -533,25 +535,52 @@ return Scaffold(
           width: 44,
           height: 44,
           child: Center(
-            child: items[i] == null
-                ? SvgPicture.asset(
-                    svgPaths[i]!,
-                    width: 26,
-                    height: 26,
-                    colorFilter: ColorFilter.mode(
-                      isActive ? const Color(0xFF4F8FDB) : Colors.white,
-                      BlendMode.srcIn,
+            child: _wrapBadge(
+              i,
+              items[i] == null
+                  ? SvgPicture.asset(
+                      svgPaths[i]!,
+                      width: 26,
+                      height: 26,
+                      colorFilter: ColorFilter.mode(
+                        isActive ? const Color(0xFF4F8FDB) : Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    )
+                  : Icon(
+                      items[i],
+                      color: isActive ? const Color(0xFF4F8FDB) : Colors.white,
+                      size: 22,
                     ),
-                  )
-                : Icon(
-                    items[i],
-                    color: isActive ? const Color(0xFF4F8FDB) : Colors.white,
-                    size: 22,
-                  ),
+            ),
           ),
         ),
       );
     });
+  }
+
+  /// ห่อไอคอนแชท (index 2) ด้วยจุดแดงถ้า showChatBadge
+  Widget _wrapBadge(int index, Widget icon) {
+    if (index != 2 || !widget.showChatBadge) return icon;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        icon,
+        Positioned(
+          right: -2,
+          top: -2,
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE53935),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF4F8FDB), width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -593,7 +622,7 @@ class _DropdownItemState extends State<_DropdownItem> {
             Text(
               widget.label,
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 16,
                 color: color,
               ),

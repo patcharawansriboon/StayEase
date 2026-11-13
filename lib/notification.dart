@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'widgets/app_sizes.dart';
 class NotificationScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final bool isTenant;
@@ -49,7 +50,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   const Text(
                     'จัดการการแจ้งเตือน',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF000000),
@@ -59,7 +60,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   const Text(
                     'เลือกประเภทการแจ้งเตือนที่ต้องการ',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 13,
                       color: Color(0xFF999999),
                     ),
@@ -133,7 +134,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 28,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -142,9 +143,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
               child: Text(
                 'การแจ้งเตือน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),
@@ -185,7 +186,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             child: Text(
               label,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 15,
                 color: Color(0xFF000000),
               ),

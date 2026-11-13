@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/room_members_service.dart';
 
+import '../widgets/app_sizes.dart';
 class RoomMembersScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onNavigateToInvitationCode;
@@ -115,7 +116,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
                                   Text(
                                     'รหัสเชิญ',
                                     style: TextStyle(
-                                      fontFamily: 'Prompt',
+                                      fontFamily: 'Noto Sans Thai',
                                       fontSize: 12,
                                       color: Colors.white,
                                     ),
@@ -170,7 +171,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
                 Text(
                   'ห้อง $_roomNumber',
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF000000),
@@ -180,7 +181,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
                 Text(
                   'หอพัก StayEase • อาคาร $_building ชั้น $_floor',
                   style: const TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Color(0xFF888888),
                   ),
@@ -197,7 +198,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
             child: Text(
               '${_members.length}/$capacity',
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 color: Color(0xFF4F8FDB),
                 fontWeight: FontWeight.w500,
@@ -224,7 +225,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
             _error,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 13,
               color: Color(0xFF888888),
             ),
@@ -247,7 +248,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
           const Text(
             'สมาชิกในห้อง',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: Color(0xFF000000),
@@ -261,7 +262,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
                 child: Text(
                   'ยังไม่มีสมาชิกในห้องนี้',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 13,
                     color: Color(0xFFAAAAAA),
                   ),
@@ -290,7 +291,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
             Text(
               member['role'] ?? 'Roommate',
               style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 12,
                   color: Color(0xFF888888)),
             ),
@@ -306,7 +307,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
                 child: const Text(
                   'ฉัน',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 10,
                     color: Color(0xFF4F8FDB),
                   ),
@@ -354,7 +355,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
             Text(
               name,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF000000),
@@ -364,7 +365,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
             Text(
               phone,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 12,
                 color: Color(0xFF888888),
               ),
@@ -384,7 +385,7 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -393,8 +394,9 @@ class RoomMembersScreenState extends State<RoomMembersScreen> {
               child: Text(
                 'สมาชิกในห้อง',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

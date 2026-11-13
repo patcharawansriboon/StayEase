@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'widgets/app_sizes.dart';
 class BillDetailsScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onEdit;
@@ -19,7 +20,7 @@ class BillDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           Padding(
@@ -30,7 +31,7 @@ class BillDetailsScreen extends StatelessWidget {
                   onTap: onBack,
                   child: const Icon(
                     Icons.chevron_left,
-                    size: 28,
+                    size: kBackIconSize,
                     color: Color(0xFF000000),
                   ),
                 ),
@@ -117,42 +118,10 @@ class BillDetailsScreen extends StatelessWidget {
                           'ครบกำหนด', bill['due_date'] ?? '5 สิงหาคม 2569'),
                     ),
                     const SizedBox(height: 24),
-                    GestureDetector(
-                      onTap: onEdit,
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFEEEEEE)),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Image.asset(
-                              'assets/images/qr_code_payment-48e4cd.png',
-                              width: 64,
-                              height: 64,
-                              fit: BoxFit.contain,
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'QR PromptPay',
-                              style: TextStyle(
-                                fontFamily: 'Prompt',
-                                fontSize: 12,
-                                color: Color(0xFF333333),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
                     const Text(
                       'ขอบคุณที่ใช้บริการ StayEase',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 13,
                         color: Color(0xFF999999),
                       ),
@@ -172,34 +141,6 @@ class BillDetailsScreen extends StatelessWidget {
               ),
             ),
           ),
-          if (onEdit != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: GestureDetector(
-                  onTap: onEdit,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5B93D4),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'แก้ไข',
-                        style: TextStyle(
-                          fontFamily: 'Prompt',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -213,7 +154,7 @@ class BillDetailsScreen extends StatelessWidget {
           child: Text(
             label,
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               color: Color(0xFF888888),
             ),
@@ -222,7 +163,7 @@ class BillDetailsScreen extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 14,
             color: Color(0xFF1A1A2E),
           ),
@@ -233,7 +174,7 @@ class BillDetailsScreen extends StatelessWidget {
 
   Widget _buildAmountRow(String label, String amount, {bool bold = false}) {
     final style = TextStyle(
-      fontFamily: 'Prompt',
+      fontFamily: 'Noto Sans Thai',
       fontSize: 14,
       fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
       color: const Color(0xFF1A1A2E),

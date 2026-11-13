@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -6,10 +7,15 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../widgets/app_sizes.dart';
+import '../widgets/keyboard_safe_scroll.dart';
+
 class EditeRentalInformationScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final ValueChanged<Map<String, String>>? onSave;
   final VoidCallback? onNavigateToMap;
+  final String avatarUrl;
+  final ValueChanged<String>? onAvatarChanged;
   final String userName;
   final String userPhone;
   final Map<String, String> rentalInfo;
@@ -19,6 +25,8 @@ class EditeRentalInformationScreen extends StatefulWidget {
     this.onBack,
     this.onSave,
     this.onNavigateToMap,
+    this.avatarUrl = '',
+    this.onAvatarChanged,
     this.userName = 'พัชราวรรณ  ศรีบุญ',
     this.userPhone = '099-0000000',
     this.rentalInfo = const {},
@@ -49,15 +57,121 @@ class _EditeRentalInformationScreenState
 
   final FocusNode _idCardFocusNode = FocusNode();
   bool _idCardError = false;
-  File? _profileImage;
+  Uint8List? _profileImageBytes;
 
   final List<Map<String, dynamic>> _attachments = []; // {file, title}
+  final List<String> _removedDocumentUrls =
+      []; // url ของเอกสารที่ถูกลบ (รอลบไฟล์ตอนบันทึก)
+
+  /// ลบไฟล์เอกสารออกจาก Supabase Storage
+  Future<void> _deleteFileFromStorage(String url) async {
+    if (url.isEmpty) return;
+    const marker = 'dormitory-images/';
+    final idx = url.indexOf(marker);
+    if (idx == -1) return;
+    final path = url.substring(idx + marker.length);
+    if (path.isEmpty) return;
+    try {
+      await Supabase.instance.client.storage.from('dormitory-images').remove([
+        path,
+      ]);
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ delete document file error: $e');
+    }
+  }
+
+  /// กดลบเอกสารแนบ (ยังไม่ลบไฟล์จริงจนกว่าจะกดบันทึก)
+  Future<void> _deleteAttachment(int index) async {
+    final att = _attachments[index];
+    final title = (att['title'] as String?) ?? 'เอกสาร';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'ลบเอกสารแนบ',
+          style: TextStyle(
+            fontFamily: 'Noto Sans Thai',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'ต้องการลบ "$title" ใช่หรือไม่?',
+          style: const TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Color(0xFFAAAAAA),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF0303),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            child: const Text(
+              'ลบ',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final url = (att['url'] as String?) ?? '';
+    setState(() {
+      _attachments.removeAt(index);
+      if (url.isNotEmpty) _removedDocumentUrls.add(url);
+    });
+  }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => _profileImage = File(picked.path));
+    if (picked != null && mounted) {
+      final bytes = await picked.readAsBytes();
+      setState(() => _profileImageBytes = bytes);
+      try {
+        final db = Supabase.instance.client;
+        final uid = db.auth.currentUser?.id;
+        if (uid != null) {
+          final ext = picked.path.split('.').last;
+          final path =
+              'avatars/${uid}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          await db.storage
+              .from('dormitory-images')
+              .uploadBinary(
+                path,
+                bytes,
+                fileOptions: const FileOptions(upsert: true),
+              );
+          final url = db.storage.from('dormitory-images').getPublicUrl(path);
+          await db.from('tenants').update({'avatar_url': url}).eq('id', uid);
+          await db
+              .from('roommate_invites')
+              .update({'avatar_url': url})
+              .eq('id', uid);
+          widget.onAvatarChanged?.call(url);
+        }
+      } catch (e) {
+        debugPrint('avatar upload error: $e');
+      }
     }
   }
 
@@ -76,16 +190,22 @@ class _EditeRentalInformationScreenState
         title: const Text(
           'ชื่อหัวข้อเอกสาร',
           style: TextStyle(
-              fontFamily: 'Prompt', fontSize: 15, fontWeight: FontWeight.w600),
+            fontFamily: 'Noto Sans Thai',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         content: TextField(
           controller: titleController,
           autofocus: true,
-          style: const TextStyle(fontFamily: 'Prompt', fontSize: 14),
+          style: const TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 14),
           decoration: InputDecoration(
             hintText: 'กรุณากรอกชื่อหัวข้อ',
             hintStyle: const TextStyle(
-                fontFamily: 'Prompt', fontSize: 14, color: Color(0xFFAAAAAA)),
+              fontFamily: 'Noto Sans Thai',
+              fontSize: 14,
+              color: Color(0xFFAAAAAA),
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
@@ -94,27 +214,39 @@ class _EditeRentalInformationScreenState
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: Color(0xFF4F8FDB)),
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('ยกเลิก',
-                style:
-                    TextStyle(fontFamily: 'Prompt', color: Color(0xFFAAAAAA))),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Color(0xFFAAAAAA),
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4F8FDB),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               elevation: 0,
             ),
-            child: const Text('เพิ่ม',
-                style: TextStyle(fontFamily: 'Prompt', color: Colors.white)),
+            child: const Text(
+              'เพิ่ม',
+              style: TextStyle(
+                fontFamily: 'Noto Sans Thai',
+                color: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
@@ -140,6 +272,13 @@ class _EditeRentalInformationScreenState
   Future<String> _uploadDocuments() async {
     final db = Supabase.instance.client;
     final uid = db.auth.currentUser?.id ?? 'anon';
+
+    // ลบไฟล์เอกสารที่ผู้ใช้กดลบออกจาก Storage
+    for (final url in _removedDocumentUrls) {
+      await _deleteFileFromStorage(url);
+    }
+    _removedDocumentUrls.clear();
+
     final lines = <String>[];
     for (final att in _attachments) {
       final title = (att['title'] as String?) ?? 'เอกสาร';
@@ -152,7 +291,9 @@ class _EditeRentalInformationScreenState
           final ext = fileName.contains('.') ? fileName.split('.').last : 'png';
           final path =
               'documents/${uid}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-          await db.storage.from('dormitory-images').uploadBinary(
+          await db.storage
+              .from('dormitory-images')
+              .uploadBinary(
                 path,
                 bytes,
                 fileOptions: const FileOptions(upsert: true),
@@ -173,12 +314,16 @@ class _EditeRentalInformationScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_attachments.isNotEmpty) ...[
-          ..._attachments.map((att) {
+          ..._attachments.asMap().entries.map((entry) {
+            final index = entry.key;
+            final att = entry.value;
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -186,14 +331,17 @@ class _EditeRentalInformationScreenState
                 ),
                 child: Row(
                   children: [
-                    SvgPicture.asset('assets/images/icon_document.svg',
-                        width: 28, height: 28),
+                    SvgPicture.asset(
+                      'assets/images/icon_document.svg',
+                      width: 28,
+                      height: 28,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         att['title'] as String,
                         style: const TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           color: Color(0xFF000000),
                         ),
@@ -209,16 +357,37 @@ class _EditeRentalInformationScreenState
                             color: Color(0xFF4CAF50),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.check,
-                              size: 13, color: Colors.white),
+                          child: const Icon(
+                            Icons.check,
+                            size: 13,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(width: 6),
                         const Text(
                           'อัปโหลดแล้ว',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 12,
                             color: Color(0xFF4CAF50),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // ปุ่มลบเอกสาร
+                        GestureDetector(
+                          onTap: () => _deleteAttachment(index),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDECEA),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline,
+                              size: 15,
+                              color: Color(0xFFE53935),
+                            ),
                           ),
                         ),
                       ],
@@ -243,13 +412,16 @@ class _EditeRentalInformationScreenState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SvgPicture.asset('assets/images/upload.svg',
-                    width: 18, height: 18),
+                SvgPicture.asset(
+                  'assets/images/upload.svg',
+                  width: 18,
+                  height: 18,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'อัปโหลดไฟล์',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     color: Color(0xFF4F8FDB),
                   ),
@@ -263,13 +435,33 @@ class _EditeRentalInformationScreenState
   }
 
   final List<String> _months = [
-    'ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย',
-    'ก.ค', 'ส.ค', 'ก.ย', 'ต.ค', 'พ.ย', 'ธ.ค'
+    'ม.ค',
+    'ก.พ',
+    'มี.ค',
+    'เม.ย',
+    'พ.ค',
+    'มิ.ย',
+    'ก.ค',
+    'ส.ค',
+    'ก.ย',
+    'ต.ค',
+    'พ.ย',
+    'ธ.ค',
   ];
 
   final List<String> _monthsFull = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    'มกราคม',
+    'กุมภาพันธ์',
+    'มีนาคม',
+    'เมษายน',
+    'พฤษภาคม',
+    'มิถุนายน',
+    'กรกฎาคม',
+    'สิงหาคม',
+    'กันยายน',
+    'ตุลาคม',
+    'พฤศจิกายน',
+    'ธันวาคม',
   ];
 
   int _selectedDay = 26;
@@ -317,7 +509,7 @@ class _EditeRentalInformationScreenState
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
@@ -333,20 +525,25 @@ class _EditeRentalInformationScreenState
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedDay - 1),
+                              initialItem: _selectedDay - 1,
+                            ),
                             itemExtent: 40,
                             looping: true,
-                            onSelectedItemChanged: (i) =>
-                                setModalState(() => _selectedDay = (i % 31) + 1),
-                            children: List.generate(31,
-                                (i) => _pickerItem('${i + 1}')),
+                            onSelectedItemChanged: (i) => setModalState(
+                              () => _selectedDay = (i % 31) + 1,
+                            ),
+                            children: List.generate(
+                              31,
+                              (i) => _pickerItem('${i + 1}'),
+                            ),
                           ),
                         ),
                         // Month
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedMonth),
+                              initialItem: _selectedMonth,
+                            ),
                             itemExtent: 40,
                             looping: true,
                             onSelectedItemChanged: (i) =>
@@ -360,14 +557,17 @@ class _EditeRentalInformationScreenState
                         Expanded(
                           child: CupertinoPicker(
                             scrollController: FixedExtentScrollController(
-                                initialItem: _selectedYear - 2540),
+                              initialItem: _selectedYear - 2540,
+                            ),
                             itemExtent: 40,
                             looping: true,
-                            onSelectedItemChanged: (i) =>
-                                setModalState(() => _selectedYear = (i % 30) + 2540),
+                            onSelectedItemChanged: (i) => setModalState(
+                              () => _selectedYear = (i % 30) + 2540,
+                            ),
                             children: List.generate(
-                                30,
-                                (i) => _pickerItem('${i + 2540}')),
+                              30,
+                              (i) => _pickerItem('${i + 2540}'),
+                            ),
                           ),
                         ),
                       ],
@@ -387,7 +587,7 @@ class _EditeRentalInformationScreenState
       child: Text(
         text,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 16,
           color: Color(0xFF000000),
         ),
@@ -431,15 +631,14 @@ class _EditeRentalInformationScreenState
                       child: TextButton(
                         onPressed: () {
                           setState(() {
-                            _genderController.text =
-                                _genders[_selectedGender];
+                            _genderController.text = _genders[_selectedGender];
                           });
                           Navigator.pop(context);
                         },
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                             fontWeight: FontWeight.w600,
@@ -451,12 +650,12 @@ class _EditeRentalInformationScreenState
                   Expanded(
                     child: CupertinoPicker(
                       scrollController: FixedExtentScrollController(
-                          initialItem: _selectedGender),
+                        initialItem: _selectedGender,
+                      ),
                       itemExtent: 40,
                       onSelectedItemChanged: (i) =>
                           setModalState(() => _selectedGender = i),
-                      children:
-                          _genders.map((g) => _pickerItem(g)).toList(),
+                      children: _genders.map((g) => _pickerItem(g)).toList(),
                     ),
                   ),
                 ],
@@ -472,10 +671,12 @@ class _EditeRentalInformationScreenState
   void initState() {
     super.initState();
     final info = widget.rentalInfo;
-    _nameController.text =
-        (info['name'] ?? '').isNotEmpty ? info['name']! : widget.userName;
-    _phoneController.text =
-        (info['phone'] ?? '').isNotEmpty ? info['phone']! : widget.userPhone;
+    _nameController.text = (info['name'] ?? '').isNotEmpty
+        ? info['name']!
+        : widget.userName;
+    _phoneController.text = (info['phone'] ?? '').isNotEmpty
+        ? info['phone']!
+        : widget.userPhone;
     if ((info['idCard'] ?? '').isNotEmpty) {
       _idCardController.text = info['idCard']!;
     }
@@ -509,8 +710,7 @@ class _EditeRentalInformationScreenState
     }
     _idCardFocusNode.addListener(() {
       if (!_idCardFocusNode.hasFocus) {
-        final digits =
-            _idCardController.text.replaceAll(RegExp(r'[^0-9]'), '');
+        final digits = _idCardController.text.replaceAll(RegExp(r'[^0-9]'), '');
         setState(() {
           _idCardError = digits.isNotEmpty && digits.length != 13;
         });
@@ -524,7 +724,8 @@ class _EditeRentalInformationScreenState
     if (oldWidget.userName != widget.userName && widget.userName.isNotEmpty) {
       _nameController.text = widget.userName;
     }
-    if (oldWidget.userPhone != widget.userPhone && widget.userPhone.isNotEmpty) {
+    if (oldWidget.userPhone != widget.userPhone &&
+        widget.userPhone.isNotEmpty) {
       _phoneController.text = widget.userPhone;
     }
   }
@@ -555,16 +756,14 @@ class _EditeRentalInformationScreenState
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
+              child: KeyboardSafeScroll(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: Column(
+                content: Column(
                   children: [
                     // Avatar
                     Stack(
@@ -576,16 +775,26 @@ class _EditeRentalInformationScreenState
                             shape: BoxShape.circle,
                             color: Colors.white,
                             border: Border.all(
-                                color: const Color(0xFF4F8FDB), width: 2),
+                              color: const Color(0xFF4F8FDB),
+                              width: 2,
+                            ),
                           ),
                           child: ClipOval(
-                            child: _profileImage != null
-                                ? Image.file(_profileImage!, fit: BoxFit.cover)
-                                : const Icon(
-                                    Icons.person_outline,
-                                    size: 32,
-                                    color: Color(0xFF4F8FDB),
-                                  ),
+                            child: _profileImageBytes != null
+                                ? Image.memory(
+                                    _profileImageBytes!,
+                                    fit: BoxFit.cover,
+                                  )
+                                : (widget.avatarUrl.isNotEmpty
+                                      ? Image.network(
+                                          widget.avatarUrl,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : const Icon(
+                                          Icons.person_outline,
+                                          size: 32,
+                                          color: Color(0xFF4F8FDB),
+                                        )),
                           ),
                         ),
                         Positioned(
@@ -600,8 +809,11 @@ class _EditeRentalInformationScreenState
                                 color: Color(0xFF4F8FDB),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.camera_alt,
-                                  size: 11, color: Colors.white),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 11,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -615,26 +827,31 @@ class _EditeRentalInformationScreenState
                       title: 'ข้อมูลส่วนตัว',
                       children: [
                         _buildLabel('ชื่อ - นามสกุล'),
-                        _buildInput(_nameController),
+                        _buildReadOnly(
+                          _nameController.text,
+                          suffixIcon: Icons.lock_outline,
+                        ),
                         _buildLabel('เลขบัตรประชาชน'),
-                        _buildInput(_idCardController,
-                            hint: 'กรุณากรอกเลขบัตรประชาชน',
-                            keyboardType: TextInputType.number,
-                            focusNode: _idCardFocusNode,
-                            boxed: _idCardError,
-                            boxedRadius: 6,
-                            hasError: _idCardError,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              _IdCardFormatter(),
-                            ]),
+                        _buildInput(
+                          _idCardController,
+                          hint: 'กรุณากรอกเลขบัตรประชาชน',
+                          keyboardType: TextInputType.number,
+                          focusNode: _idCardFocusNode,
+                          boxed: _idCardError,
+                          boxedRadius: 6,
+                          hasError: _idCardError,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            _IdCardFormatter(),
+                          ],
+                        ),
                         if (_idCardError)
                           const Padding(
                             padding: EdgeInsets.only(top: 4),
                             child: Text(
                               'กรุณากรอกเลขให้ครบ',
                               style: TextStyle(
-                                fontFamily: 'Prompt',
+                                fontFamily: 'Noto Sans Thai',
                                 fontSize: 12,
                                 color: Color(0xFFFF0000),
                               ),
@@ -655,9 +872,11 @@ class _EditeRentalInformationScreenState
                         GestureDetector(
                           onTap: _showGenderPicker,
                           child: AbsorbPointer(
-                            child: _buildInput(_genderController,
-                                hint: 'เพศ',
-                                suffixIcon: Icons.keyboard_arrow_down),
+                            child: _buildInput(
+                              _genderController,
+                              hint: 'เพศ',
+                              suffixIcon: Icons.keyboard_arrow_down,
+                            ),
                           ),
                         ),
                       ],
@@ -678,11 +897,15 @@ class _EditeRentalInformationScreenState
                         _buildLabel('ชั้น'),
                         _buildReadOnly(_floorController.text),
                         _buildLabel('วันที่เข้าพัก'),
-                        _buildReadOnly(_checkInController.text,
-                            suffixIcon: Icons.calendar_month_outlined),
+                        _buildReadOnly(
+                          _checkInController.text,
+                          suffixIcon: Icons.calendar_month_outlined,
+                        ),
                         _buildLabel('วันที่สิ้นสุดสัญญา'),
-                        _buildReadOnly(_checkOutController.text,
-                            suffixIcon: Icons.calendar_month_outlined),
+                        _buildReadOnly(
+                          _checkOutController.text,
+                          suffixIcon: Icons.calendar_month_outlined,
+                        ),
                         _buildLabel('ค่าเช่าห้อง'),
                         _buildReadOnly(_rentController.text),
                         _buildLabel('เงินประกัน'),
@@ -697,27 +920,36 @@ class _EditeRentalInformationScreenState
                       title: 'ข้อมูลติดต่อ',
                       children: [
                         _buildLabel('เบอร์โทร'),
-                        _buildInput(_phoneController),
+                        _buildReadOnly(
+                          _phoneController.text,
+                          suffixIcon: Icons.lock_outline,
+                        ),
                         _buildLabel('ที่อยู่'),
                         GestureDetector(
                           onTap: widget.onNavigateToMap,
                           child: AbsorbPointer(
-                            child: _buildInput(_addressController,
-                                hint: 'กรุณากรอกที่อยู่',
-                                suffixIcon: Icons.chevron_right),
+                            child: _buildInput(
+                              _addressController,
+                              hint: 'กรุณากรอกที่อยู่',
+                              suffixIcon: Icons.chevron_right,
+                            ),
                           ),
                         ),
                         _buildLabel('ผู้ติดต่อฉุกเฉิน'),
-                        _buildInput(_emergencyContactController,
-                            hint: 'กรุณากรอกข้อมูล'),
+                        _buildInput(
+                          _emergencyContactController,
+                          hint: 'กรุณากรอกข้อมูล',
+                        ),
                         _buildLabel('เบอร์โทรฉุกเฉิน'),
-                        _buildInput(_emergencyPhoneController,
-                            hint: 'กรุณากรอกเบอร์โทร',
-                            keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(10),
-                            ]),
+                        _buildInput(
+                          _emergencyPhoneController,
+                          hint: 'กรุณากรอกเบอร์โทร',
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -726,36 +958,32 @@ class _EditeRentalInformationScreenState
                     _buildSection(
                       svgIcon: 'assets/images/note_rental.svg',
                       title: 'เอกสารแนบ',
-                      children: [
-                        _buildUploadButton(),
-                      ],
+                      children: [_buildUploadButton()],
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            // บันทึก button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _showSaveDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F8FDB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'บันทึก',
-                    style: TextStyle(
-                      fontFamily: 'Prompt',
-                      fontSize: 16,
-                      color: Colors.white,
+                bottom: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _showSaveDialog,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4F8FDB),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'บันทึก',
+                        style: TextStyle(
+                          fontFamily: 'Noto Sans Thai',
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -786,7 +1014,7 @@ class _EditeRentalInformationScreenState
                   'คุณต้องการยกเลิกการแก้ไขใช่ไหม?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF000000),
@@ -808,7 +1036,7 @@ class _EditeRentalInformationScreenState
                         child: const Text(
                           'ยกเลิก',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                           ),
@@ -833,7 +1061,7 @@ class _EditeRentalInformationScreenState
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Colors.white,
                           ),
@@ -869,7 +1097,7 @@ class _EditeRentalInformationScreenState
                   'คุณต้องการบันทึกข้อมูลใช่ไหม?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF000000),
@@ -891,7 +1119,7 @@ class _EditeRentalInformationScreenState
                         child: const Text(
                           'ยกเลิก',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Color(0xFF4F8FDB),
                           ),
@@ -929,7 +1157,7 @@ class _EditeRentalInformationScreenState
                         child: const Text(
                           'ตกลง',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             color: Colors.white,
                           ),
@@ -953,15 +1181,16 @@ class _EditeRentalInformationScreenState
         children: [
           GestureDetector(
             onTap: _showBackDialog,
-            child: const Icon(Icons.chevron_left, size: 24),
+            child: const Icon(Icons.chevron_left, size: kBackIconSize),
           ),
           const Expanded(
             child: Center(
               child: Text(
                 'แก้ไขรายละเอียด',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),
@@ -983,17 +1212,14 @@ class _EditeRentalInformationScreenState
     String? trailingSvg,
     required List<Widget> children,
   }) {
-return Container(
-       width: double.infinity,
-       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-       decoration: BoxDecoration(
-         color: Colors.white,
-         borderRadius: BorderRadius.circular(16),
-         border: Border.all(
-           color: const Color(0xFFD9D9D9),
-           width: 1,
-         ),
-       ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD9D9D9), width: 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1007,7 +1233,7 @@ return Container(
               Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF4F8FDB),
@@ -1018,7 +1244,7 @@ return Container(
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 12,
                     color: Colors.black.withValues(alpha: 0.4),
                   ),
@@ -1044,7 +1270,7 @@ return Container(
       child: Text(
         text,
         style: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 15,
           color: Color(0xFF000000),
         ),
@@ -1056,68 +1282,129 @@ return Container(
     TextEditingController controller, {
     String? hint,
     IconData? suffixIcon,
-    List<TextInputFormatter>? inputFormatters,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     bool boxed = false,
     double boxedRadius = 8,
     FocusNode? focusNode,
     bool hasError = false,
+    bool readOnly = false,
     double bottomPadding = 4,
   }) {
-    final borderColor =
-        hasError ? const Color(0xFFFF0000) : const Color(0xFFE0E0E0);
-    final focusColor =
-        hasError ? const Color(0xFFFF0000) : const Color(0xFF4F8FDB);
+    final borderColor = hasError
+        ? const Color(0xFFFF0000)
+        : const Color(0xFFE0E0E0);
+    final focusColor = hasError
+        ? const Color(0xFFFF0000)
+        : const Color(0xFF4F8FDB);
+    if (boxed) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(boxedRadius),
+          border: Border.all(color: borderColor),
+        ),
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          readOnly: readOnly,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          style: TextStyle(
+            fontFamily: 'Noto Sans Thai',
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: readOnly ? const Color(0xFF888888) : const Color(0xFF000000),
+          ),
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              fontFamily: 'Noto Sans Thai',
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFFD9D9D9),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            isDense: true,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(boxedRadius),
+              borderSide: BorderSide(color: focusColor),
+            ),
+            suffixIcon: suffixIcon != null
+                ? (suffixIcon == Icons.calendar_month_outlined
+                      ? GestureDetector(
+                          onTap: () => _showDatePicker(controller),
+                          child: Icon(
+                            suffixIcon,
+                            size: 18,
+                            color: const Color(0xFFAAAAAA),
+                          ),
+                        )
+                      : Icon(
+                          suffixIcon,
+                          size: 18,
+                          color: const Color(0xFFAAAAAA),
+                        ))
+                : null,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 18,
+              minHeight: 18,
+            ),
+          ),
+        ),
+      );
+    }
     return TextField(
       controller: controller,
       focusNode: focusNode,
-      inputFormatters: inputFormatters,
+      readOnly: readOnly,
       keyboardType: keyboardType,
-      style: const TextStyle(
-          fontFamily: 'Prompt', fontSize: 14, fontWeight: FontWeight.w500),
+      inputFormatters: inputFormatters,
+      style: TextStyle(
+        fontFamily: 'Noto Sans Thai',
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: readOnly ? const Color(0xFF888888) : const Color(0xFF000000),
+      ),
       textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 14,
           fontWeight: FontWeight.w500,
           color: Color(0xFFD9D9D9),
         ),
-        contentPadding: boxed
-            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-            : EdgeInsets.only(top: 0, bottom: bottomPadding),
+        contentPadding: EdgeInsets.only(top: 0, bottom: bottomPadding),
         isDense: true,
+        enabledBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: borderColor),
+        ),
+        focusedBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: focusColor),
+        ),
+        suffixIcon: suffixIcon != null
+            ? (suffixIcon == Icons.calendar_month_outlined
+                  ? GestureDetector(
+                      onTap: () => _showDatePicker(controller),
+                      child: Icon(
+                        suffixIcon,
+                        size: 18,
+                        color: const Color(0xFFAAAAAA),
+                      ),
+                    )
+                  : Icon(suffixIcon, size: 18, color: const Color(0xFFAAAAAA)))
+            : null,
         suffixIconConstraints: const BoxConstraints(
           minWidth: 18,
           minHeight: 18,
         ),
-        enabledBorder: boxed
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(boxedRadius),
-                borderSide: BorderSide(color: borderColor),
-              )
-            : UnderlineInputBorder(
-                borderSide: BorderSide(color: borderColor),
-              ),
-        focusedBorder: boxed
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(boxedRadius),
-                borderSide: BorderSide(color: focusColor),
-              )
-            : UnderlineInputBorder(
-                borderSide: BorderSide(color: focusColor),
-              ),
-        suffixIcon: suffixIcon != null
-            ? (suffixIcon == Icons.calendar_month_outlined
-                ? GestureDetector(
-                    onTap: () => _showDatePicker(controller),
-                    child: Icon(suffixIcon,
-                        size: 18, color: const Color(0xFFAAAAAA)),
-                  )
-                : Icon(suffixIcon,
-                    size: 18, color: const Color(0xFFAAAAAA)))
-            : null,
       ),
     );
   }
@@ -1136,7 +1423,7 @@ return Container(
             child: Text(
               value,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 13,
                 color: Color(0xFF888888),
               ),

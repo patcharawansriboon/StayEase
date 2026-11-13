@@ -64,7 +64,7 @@ class SelectUserScreen extends StatelessWidget {
                   Text.rich(
                     TextSpan(
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF000000),
@@ -83,7 +83,7 @@ class SelectUserScreen extends StatelessWidget {
                     'จัดการหอพักของคุณได้ง่ายขึ้น\nในที่เดียว',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 15,
                       color: Color(0xFF666666),
                       height: 1.5,
@@ -116,7 +116,7 @@ class SelectUserScreen extends StatelessWidget {
                       const Text(
                         'มีบัญชีอยู่แล้ว?  ',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 14,
                           color: Color(0xFF666666),
                         ),
@@ -126,7 +126,7 @@ class SelectUserScreen extends StatelessWidget {
                         child: const Text(
                           'เข้าสู่ระบบ',
                           style: TextStyle(
-                            fontFamily: 'Prompt',
+                            fontFamily: 'Noto Sans Thai',
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF4181CB),
@@ -177,7 +177,7 @@ class SelectUserScreen extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
                 color: filled ? Colors.white : const Color(0xFF4181CB),

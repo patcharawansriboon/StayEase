@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../services/tenant_auth_service.dart';
+import '../widgets/sign_up_background.dart';
+
+import '../widgets/app_sizes.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  TenantGoogleSignupScreen
@@ -14,7 +16,7 @@ import '../services/tenant_auth_service.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class TenantGoogleSignupScreen extends StatefulWidget {
   final VoidCallback onBack;
-  final VoidCallback onRequestSent;       // → pending_approval
+  final VoidCallback onRequestSent; // → pending_approval
   final VoidCallback onNavigateToSignIn;
 
   const TenantGoogleSignupScreen({
@@ -171,58 +173,87 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          // ── Back button ──
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8, top: 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.chevron_left,
-                      size: 28, color: Color(0xFF1A1A2E)),
-                  onPressed: _isLoading ? null : widget.onBack,
-                ),
-              ),
-            ),
-          ),
-
-          // ── Illustration ──
-          SizedBox(
-            width: 160,
-            height: 110,
-            child: SvgPicture.asset(
-              'assets/images/Add-User.svg',
-              fit: BoxFit.contain,
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // ── Blue form panel ──
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFFBCDEFB),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(32),
-                  topRight: Radius.circular(32),
-                ),
-              ),
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF4F8FDB),
+      body: SignUpBackground(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // รูปหดตามพื้นที่ที่เหลือ (แป้นพิมพ์ขึ้นแล้วพื้นที่แคบ รูปจะเล็กลง/หายไป ฟอร์มได้พื้นที่ก่อน)
+            final imageScale = ((constraints.maxHeight - 60 - 380) / 180)
+                .clamp(0.0, 1.0)
+                .toDouble();
+            return Column(
+              children: [
+                // ── Back button ──
+                SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8, top: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.chevron_left,
+                          size: kBackIconSize,
+                          color: Color(0xFF1A1A2E),
+                        ),
+                        onPressed: _isLoading ? null : widget.onBack,
                       ),
-                    )
-                  : _googleDone
-                      ? _buildFormStep()
-                      : _buildGoogleStep(),
-            ),
-          ),
-        ],
+                    ),
+                  ),
+                ),
+
+                // ── Illustration ──
+                if (imageScale > 0.02)
+                  Align(
+                    alignment: Alignment.centerRight, // ชิดขวา
+                    // ครอปพื้นที่ขาวด้านล่างของรูปออก เพื่อให้การ์ดสีฟ้าอยู่ใกล้รูป
+                    child: SizedBox(
+                      width: 250 * imageScale,
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          heightFactor: 0.8,
+                          child: Image.asset(
+                            'assets/images/sign_up2.png',
+                            height: 225 * imageScale,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 4),
+
+                // ── Blue form panel ──
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                    ), // เว้นระยะจากขอบจอ
+                    clipBehavior: Clip
+                        .antiAlias, // ตัดเนื้อหาที่เลื่อนให้อยู่ในรูปทรง card
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF4F8FDB),
+                            ),
+                          )
+                        : _googleDone
+                        ? _buildFormStep()
+                        : _buildGoogleStep(),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -230,14 +261,14 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
   // ── Step 1: ปุ่ม Google ───────────────────────────────────────────────────
   Widget _buildGoogleStep() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+      padding: const EdgeInsets.fromLTRB(12, 32, 12, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'สมัครใช้งาน\nสำหรับผู้เช่า',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 22,
               fontWeight: FontWeight.w700,
               color: Color(0xFF1A1A2E),
@@ -248,7 +279,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
           const Text(
             'เข้าสู่ระบบด้วยบัญชี Google ของคุณ\nเพื่อสมัครเข้าหอพัก',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 14,
               color: Color(0xFF555555),
               height: 1.5,
@@ -286,7 +317,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
                   const Text(
                     'ดำเนินการต่อด้วย Google',
                     style: TextStyle(
-                      fontFamily: 'Prompt',
+                      fontFamily: 'Noto Sans Thai',
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: Color(0xFF1A1A2E),
@@ -311,7 +342,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
               const Text(
                 'มีบัญชีอยู่แล้ว?  ',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 14,
                   color: Color(0xFF000000),
                 ),
@@ -321,7 +352,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
                 child: const Text(
                   'เข้าสู่ระบบ',
                   style: TextStyle(
-                    fontFamily: 'Prompt',
+                    fontFamily: 'Noto Sans Thai',
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF4181CB),
@@ -340,7 +371,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
   // ── Step 2: กรอกข้อมูลเพิ่มเติม ──────────────────────────────────────────
   Widget _buildFormStep() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+      padding: const EdgeInsets.fromLTRB(12, 28, 12, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -366,7 +397,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
                     Text(
                       _googleEmail,
                       style: const TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 12,
                         color: Color(0xFF555555),
                       ),
@@ -375,7 +406,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
                     const Text(
                       'เชื่อมต่อกับ Google แล้ว ✓',
                       style: TextStyle(
-                        fontFamily: 'Prompt',
+                        fontFamily: 'Noto Sans Thai',
                         fontSize: 12,
                         color: Color(0xFF4CAF50),
                         fontWeight: FontWeight.w600,
@@ -393,6 +424,18 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
             _buildErrorBox(_generalError!),
             const SizedBox(height: 12),
           ],
+
+          // หัวข้อ
+          const Text(
+            'สมัครสมาชิก',
+            style: TextStyle(
+              fontFamily: 'Noto Sans Thai',
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0A3282),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // ชื่อ-นามสกุล
           _buildLabel('ชื่อ-นามสกุล'),
@@ -422,7 +465,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
             Text(
               _phoneError!,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 11,
                 color: Color(0xFFFF0303),
               ),
@@ -436,7 +479,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
           const Text(
             'ตัวอย่าง: SE-2569-001',
             style: TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 11,
               color: Color(0xFF888888),
             ),
@@ -454,7 +497,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
             Text(
               _dormCodeError!,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 11,
                 color: Color(0xFFFF0303),
               ),
@@ -478,7 +521,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
               child: const Text(
                 'สมัครใช้งาน',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
@@ -496,7 +539,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
     return Text(
       text,
       style: const TextStyle(
-        fontFamily: 'Prompt',
+        fontFamily: 'Noto Sans Thai',
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: Color(0xFF1A1A2E),
@@ -510,7 +553,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
         Text(
           label,
           style: const TextStyle(
-            fontFamily: 'Prompt',
+            fontFamily: 'Noto Sans Thai',
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: Color(0xFF1A1A2E),
@@ -521,7 +564,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
           Text(
             '• กรุณากรอกให้ถูกต้อง',
             style: const TextStyle(
-              fontFamily: 'Prompt',
+              fontFamily: 'Noto Sans Thai',
               fontSize: 11,
               color: Color(0xFFFF0303),
             ),
@@ -547,21 +590,23 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
       onChanged: onChanged,
       textCapitalization: textCapitalization,
       style: const TextStyle(
-        fontFamily: 'Prompt',
+        fontFamily: 'Noto Sans Thai',
         fontSize: 14,
         color: Color(0xFF1A1A2E),
       ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
-          fontFamily: 'Prompt',
+          fontFamily: 'Noto Sans Thai',
           fontSize: 13,
           color: Colors.grey[400],
         ),
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
@@ -577,9 +622,7 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: hasError
-                ? const Color(0xFFFF0303)
-                : const Color(0xFF4F8FDB),
+            color: hasError ? const Color(0xFFFF0303) : const Color(0xFF4F8FDB),
             width: 1.5,
           ),
         ),
@@ -598,14 +641,13 @@ class _TenantGoogleSignupScreenState extends State<TenantGoogleSignupScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline,
-              size: 16, color: Color(0xFFE05C5C)),
+          const Icon(Icons.error_outline, size: 16, color: Color(0xFFE05C5C)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 12,
                 color: Color(0xFFCC0000),
               ),
@@ -623,10 +665,7 @@ class _GoogleLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(24, 24),
-      painter: _GoogleLogoPainter(),
-    );
+    return CustomPaint(size: const Size(24, 24), painter: _GoogleLogoPainter());
   }
 }
 
@@ -637,8 +676,7 @@ class _GoogleLogoPainter extends CustomPainter {
     final radius = size.width / 2;
 
     // Background circle
-    canvas.drawCircle(center, radius,
-        Paint()..color = Colors.white);
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white);
 
     // Draw simplified "G" letter
     final textPainter = TextPainter(

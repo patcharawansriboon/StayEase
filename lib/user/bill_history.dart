@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class BillHistoryScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onNavigateToHome;
@@ -62,7 +63,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
             onTap: widget.onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -123,10 +124,10 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
             children: [
               const Text(
                 'บิลประจำเดือน',
-                style: TextStyle(fontFamily: 'Prompt', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFFFEFFAF)),
+                style: TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFFFEFFAF)),
               ),
               const SizedBox(height: 4),
-              Text(month, style: const TextStyle(fontFamily: 'Prompt', fontSize: 12, color: Colors.white)),
+              Text(month, style: const TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 12, color: Colors.white)),
             ],
           ),
           const SizedBox(height: 16),
@@ -154,14 +155,14 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('รวมทั้งหมด',
-                        style: TextStyle(fontFamily: 'Prompt', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
+                        style: TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
                     Row(
                       children: [
                         Text('$total.00',
-                            style: const TextStyle(fontFamily: 'Prompt', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
+                            style: const TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
                         const SizedBox(width: 8),
                         const Text('บาท',
-                            style: TextStyle(fontFamily: 'Prompt', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
+                            style: TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF000000))),
                       ],
                     ),
                   ],
@@ -183,7 +184,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   }
 
   Widget _buildBillRow(String label, String amount) {
-    const style = TextStyle(fontFamily: 'Prompt', fontSize: 12, fontWeight: FontWeight.w400, color: Color(0xFF000000));
+    const style = TextStyle(fontFamily: 'Noto Sans Thai', fontSize: 12, fontWeight: FontWeight.w400, color: Color(0xFF000000));
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -201,7 +202,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
 
   Widget _buildInfoRow(String label, String value) {
     const style = TextStyle(
-      fontFamily: 'Prompt',
+      fontFamily: 'Noto Sans Thai',
       fontSize: 10,
       color: Color(0xFF000000),
     );

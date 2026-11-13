@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class PrivacyPolicyScreen extends StatelessWidget {
   final VoidCallback? onBack;
 
@@ -46,7 +47,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                                 const Text(
                                   'เราใส่ใจ',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF000000),
@@ -55,7 +56,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                                 const Text(
                                   'ความเป็นส่วนตัวของคุณ',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF000000),
@@ -65,7 +66,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                                 const Text(
                                   'StayEase ให้ความสำคัญกับทุกการคุ้มครองข้อมูลส่วนบุคคลเสมอ',
                                   style: TextStyle(
-                                    fontFamily: 'Prompt',
+                                    fontFamily: 'Noto Sans Thai',
                                     fontSize: 14,
                                     color: Color(0xFF555555),
                                     height: 1.5,
@@ -151,7 +152,7 @@ Container(
               Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
@@ -161,7 +162,7 @@ Container(
               Text(
                 detail,
                 style: const TextStyle(
-                  fontFamily: 'Prompt',
+                  fontFamily: 'Noto Sans Thai',
                   fontSize: 14,
                   color: Color(0xFF555555),
                   height: 1.5,
@@ -183,7 +184,7 @@ Container(
             onTap: onBack,
             child: const Icon(
               Icons.chevron_left,
-              size: 24,
+              size: kBackIconSize,
               color: Color(0xFF000000),
             ),
           ),
@@ -192,8 +193,9 @@ Container(
               child: Text(
                 'นโยบายความเป็นส่วนตัว',
                 style: TextStyle(
-                  fontFamily: 'Prompt',
-                  fontSize: 16,
+                  fontFamily: 'Noto Sans Thai',
+                  fontSize: kPageTitleFontSize,
+              fontWeight: FontWeight.w600,
                   color: Color(0xFF000000),
                 ),
               ),

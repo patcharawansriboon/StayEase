@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../widgets/app_sizes.dart';
 class ParticipateScreen extends StatelessWidget {
   final VoidCallback? onJoinWithCode;
   final VoidCallback? onRegisterAsTenant;
@@ -30,7 +31,7 @@ class ParticipateScreen extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: IconButton(
                   icon: const Icon(Icons.chevron_left,
-                      size: 28, color: Color(0xFF1A1A2E)),
+                      size: kBackIconSize, color: Color(0xFF1A1A2E)),
                   onPressed: onBack,
                 ),
               ),
@@ -49,7 +50,7 @@ class ParticipateScreen extends StatelessWidget {
             const Text(
               'คุณยังไม่ได้เข้าร่วมกับห้องพักได',
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF000000),
@@ -60,7 +61,7 @@ class ParticipateScreen extends StatelessWidget {
               'หากได้รับรหัสเชิญจากผู้เช่าหลัก\nสามารถกรอกรหัสเพื่อเข้าร่วมได้',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Prompt',
+                fontFamily: 'Noto Sans Thai',
                 fontSize: 15,
                 color: Colors.black.withValues(alpha: 0.45),
                 height: 1.5,
@@ -87,9 +88,9 @@ class ParticipateScreen extends StatelessWidget {
                         elevation: 0,
                       ),
                       child: const Text(
-                        'เข้าร่วมด้วยด้วยรหัสเชิญ',
+                        'เข้าร่วมด้วยรหัสเชิญ',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 16,
                           color: Colors.white,
                         ),
@@ -112,7 +113,7 @@ class ParticipateScreen extends StatelessWidget {
                       child: const Text(
                         'สมัครเป็นผู้เช่าหลัก',
                         style: TextStyle(
-                          fontFamily: 'Prompt',
+                          fontFamily: 'Noto Sans Thai',
                           fontSize: 16,
                           color: Color(0xFF4F8FDB),
                         ),
